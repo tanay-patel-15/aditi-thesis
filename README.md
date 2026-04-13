@@ -1,2 +1,3 @@
-# aditi-thesis
-ADITI THESIS
+# Welcome to your Lovable project
+
+TODO: Document your project here
