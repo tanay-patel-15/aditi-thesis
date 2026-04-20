@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface CoworkingBooking {
   id: string;
@@ -57,7 +57,7 @@ const MyBookingsPage = () => {
   const handleSearch = async () => {
     const trimmed = phone.trim();
     if (trimmed.length < 10) {
-      toast({ title: "Enter a valid phone number", variant: "destructive" });
+      toast.error("Enter a valid phone number");
       return;
     }
 
@@ -101,7 +101,7 @@ const MyBookingsPage = () => {
 
       setSearched(true);
     } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+      toast.error("Something went wrong");
     } finally {
       setLoading(false);
     }

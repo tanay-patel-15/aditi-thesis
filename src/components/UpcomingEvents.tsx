@@ -1,22 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Music, Paintbrush, UtensilsCrossed, ShoppingBag, Hammer, Sparkles, RefreshCw } from "lucide-react";
+import { MapPin, Clock, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import SubmitEventForm from "@/components/SubmitEventForm";
+import { categoryConfig } from "@/data/eventCategories";
+import { toast } from "sonner";
 
 type Event = Tables<"events">;
-
-const categoryConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  workshop: { icon: <Hammer className="w-3.5 h-3.5" />, color: "bg-heritage-olive text-white", label: "Workshop" },
-  music: { icon: <Music className="w-3.5 h-3.5" />, color: "bg-heritage-terracotta text-white", label: "Music" },
-  "flea-market": { icon: <ShoppingBag className="w-3.5 h-3.5" />, color: "bg-heritage-gold text-accent-foreground", label: "Flea Market" },
-  art: { icon: <Paintbrush className="w-3.5 h-3.5" />, color: "bg-purple-600 text-white", label: "Art" },
-  craft: { icon: <Sparkles className="w-3.5 h-3.5" />, color: "bg-heritage-olive text-white", label: "Craft" },
-  cultural: { icon: <Sparkles className="w-3.5 h-3.5" />, color: "bg-heritage-deep text-white", label: "Cultural" },
-  food: { icon: <UtensilsCrossed className="w-3.5 h-3.5" />, color: "bg-orange-600 text-white", label: "Food" },
-};
 
 const item = {
   hidden: { opacity: 0, x: 20 },
@@ -27,21 +19,33 @@ const UpcomingEvents = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchEvents = useCallback(async () => {
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const fetchEvents = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("events")
       .select("*")
       .gte("date", new Date().toISOString().split("T")[0])
       .order("date", { ascending: true })
       .limit(6);
-    setEvents(data ?? []);
+    if (!mountedRef.current) return;
+    if (error) {
+      toast.error("Could not load events");
+    } else {
+      setEvents(data ?? []);
+    }
     setLoading(false);
-  }, []);
+  };
 
   useEffect(() => {
     fetchEvents();
-  }, [fetchEvents]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loading) {
     return (
@@ -72,7 +76,6 @@ const UpcomingEvents = () => {
 
   return (
     <div className="space-y-3">
-      {/* Horizontal scroll of event cards */}
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-5 px-5 snap-x snap-mandatory scrollbar-hide">
         {events.map((ev) => {
           const { day, month, weekday } = formatDate(ev.date);
@@ -84,7 +87,6 @@ const UpcomingEvents = () => {
               variants={item}
               className="flex-shrink-0 w-[280px] snap-start bg-card rounded-xl border border-border overflow-hidden"
             >
-              {/* Date strip + category */}
               <div className="flex items-stretch">
                 <div className="w-16 flex-shrink-0 bg-heritage-terracotta/10 flex flex-col items-center justify-center py-3">
                   <span className="text-2xl font-display font-bold text-heritage-terracotta leading-none">{day}</span>

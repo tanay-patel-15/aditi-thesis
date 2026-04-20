@@ -7,16 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-const categories = [
-  { value: "workshop", label: "Workshop" },
-  { value: "music", label: "Music" },
-  { value: "art", label: "Art" },
-  { value: "craft", label: "Craft" },
-  { value: "food", label: "Food" },
-  { value: "flea-market", label: "Flea Market" },
-  { value: "cultural", label: "Cultural" },
-];
+import { allCategories } from "@/data/eventCategories";
 
 const SubmitEventForm = ({ onSubmitted }: { onSubmitted?: () => void }) => {
   const [open, setOpen] = useState(false);
@@ -116,7 +107,7 @@ const SubmitEventForm = ({ onSubmitted }: { onSubmitted?: () => void }) => {
                 <Select value={form.category} onValueChange={(v) => update("category", v)}>
                   <SelectTrigger><SelectValue placeholder="Category *" /></SelectTrigger>
                   <SelectContent>
-                    {categories.map((c) => (
+                    {allCategories.map((c) => (
                       <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>

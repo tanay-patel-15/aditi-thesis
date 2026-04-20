@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface CoworkingPlan {
   id: string;
@@ -85,7 +85,7 @@ const CoworkingBookingPage = () => {
   const prevStep = () => {
     const idx = steps.findIndex((s) => s.key === step);
     if (idx > 0) setStep(steps[idx - 1].key);
-    else navigate("/experience-packages");
+    else navigate("/plan-walk");
   };
 
   const handleConfirm = async () => {
@@ -103,9 +103,9 @@ const CoworkingBookingPage = () => {
       });
       if (error) throw error;
       setBooked(true);
-      toast({ title: "Booking Confirmed!", description: "Your co-working space has been reserved." });
+      toast.success("Booking Confirmed! Your co-working space has been reserved.");
     } catch {
-      toast({ title: "Booking failed", description: "Something went wrong. Please try WhatsApp instead.", variant: "destructive" });
+      toast.error("Booking failed. Something went wrong. Please try WhatsApp instead.");
     } finally {
       setSubmitting(false);
     }

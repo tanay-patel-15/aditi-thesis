@@ -7,7 +7,6 @@ import {
   UtensilsCrossed,
   Landmark,
   Map,
-  Compass,
   Building2,
   BookOpen,
   Camera,
@@ -38,7 +37,6 @@ const sections: { title: string; items: MenuItem[] }[] = [
     title: "Explore",
     items: [
       { icon: <Map className="w-6 h-6" />, label: "Map", description: "GPS navigation & routes", route: "/map" },
-      { icon: <Compass className="w-6 h-6" />, label: "Explore Nearby", description: "Discover places around you", route: "/explore-nearby" },
       { icon: <Building2 className="w-6 h-6" />, label: "Building Catalogue", description: "All documented heritage buildings", route: "/houses" },
     ],
   },

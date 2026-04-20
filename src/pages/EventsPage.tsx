@@ -1,10 +1,9 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { format, isSameDay, parseISO } from "date-fns";
 import {
-  ArrowLeft, MapPin, Clock, Music, Paintbrush, UtensilsCrossed,
-  ShoppingBag, Hammer, Sparkles, RefreshCw, CalendarDays, List, Share2,
+  ArrowLeft, MapPin, Clock, RefreshCw, CalendarDays, List, Share2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,20 +13,10 @@ import type { Tables } from "@/integrations/supabase/types";
 import SubmitEventForm from "@/components/SubmitEventForm";
 import EventBookingDialog from "@/components/EventBookingDialog";
 import { cn } from "@/lib/utils";
+import { categoryConfig, allCategories } from "@/data/eventCategories";
+import { toast } from "sonner";
 
 type Event = Tables<"events">;
-
-const categoryConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  workshop: { icon: <Hammer className="w-3.5 h-3.5" />, color: "bg-heritage-olive text-white", label: "Workshop" },
-  music: { icon: <Music className="w-3.5 h-3.5" />, color: "bg-heritage-terracotta text-white", label: "Music" },
-  "flea-market": { icon: <ShoppingBag className="w-3.5 h-3.5" />, color: "bg-heritage-gold text-accent-foreground", label: "Flea Market" },
-  art: { icon: <Paintbrush className="w-3.5 h-3.5" />, color: "bg-purple-600 text-white", label: "Art" },
-  craft: { icon: <Sparkles className="w-3.5 h-3.5" />, color: "bg-heritage-olive text-white", label: "Craft" },
-  cultural: { icon: <Sparkles className="w-3.5 h-3.5" />, color: "bg-heritage-deep text-white", label: "Cultural" },
-  food: { icon: <UtensilsCrossed className="w-3.5 h-3.5" />, color: "bg-orange-600 text-white", label: "Food" },
-};
-
-const allCategories = Object.entries(categoryConfig).map(([k, v]) => ({ value: k, ...v }));
 
 const EventsPage = () => {
   const navigate = useNavigate();
@@ -38,14 +27,25 @@ const EventsPage = () => {
   const [view, setView] = useState<"list" | "calendar">("list");
   const [bookingEvent, setBookingEvent] = useState<Event | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const fetchEvents = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("events")
       .select("*")
       .gte("date", new Date().toISOString().split("T")[0])
       .order("date", { ascending: true });
-    setEvents(data ?? []);
+    if (!mountedRef.current) return;
+    if (error) {
+      toast.error("Could not load events");
+    } else {
+      setEvents(data ?? []);
+    }
     setLoading(false);
   }, []);
 

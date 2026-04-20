@@ -8,11 +8,8 @@ import {
   BedDouble,
   Clock,
   Music,
-  ChefHat,
-  ShoppingBag,
   Laptop,
   MapPin,
-  MessageCircle,
   ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -49,29 +46,12 @@ const individualExperiences: IndividualExperience[] = [
     price: "₹150–₹300",
     whatsapp: "Hi! I'm interested in the music concerts at Dharmik Lal Pandya House. When is the next one?",
   },
-  {
-    id: "cafe",
-    icon: <ChefHat className="w-5 h-5" />,
-    title: "Local Kitchen & Café",
-    location: "Zaveri Enterprise Building, Ghadiyali ni Pol",
-    description: "Home-cooked Gujarati meals & chai by local women — a cloud kitchen in a heritage setting",
-    price: "₹80–₹200",
-    whatsapp: "Hi! I'd like to know today's menu at the local kitchen in Zaveri Enterprise Building.",
-  },
-  {
-    id: "souvenirs",
-    icon: <ShoppingBag className="w-5 h-5" />,
-    title: "Souvenir & Merchandise Shop",
-    location: "Heritage Precinct",
-    description: "Handcrafted postcards, tote bags, keychains & local art — take a piece of heritage home",
-    route: "/shop",
-  },
 ];
 
 const stayAmenities = [
   { icon: <BedDouble className="w-5 h-5" />, label: "Heritage Stay", desc: "Rooms in a restored pol house", whatsapp: "Hi! I'm interested in a heritage stay at the pol house. Please share availability and rates." },
   { icon: <Wifi className="w-5 h-5" />, label: "Co-working Space", desc: "Ground floor workspace", linkedExp: "coworking" },
-  { icon: <Coffee className="w-5 h-5" />, label: "Brewery & Café", desc: "In-house craft brewery", linkedExp: "cafe" },
+  { icon: <Coffee className="w-5 h-5" />, label: "Brewery & Café", desc: "In-house craft brewery", whatsapp: "Hi! I'd like to know more about the Brewery & Café facility at the heritage stay." },
   { icon: <Clock className="w-5 h-5" />, label: "Flexible Duration", desc: "3 days to 1 month", whatsapp: "Hi! I'd like to know about flexible stay durations (3 days to 1 month). What are the options?" },
 ];
 

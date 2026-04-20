@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -23,10 +22,6 @@ import MyBookingsPage from "./pages/MyBookingsPage.tsx";
 const queryClient = new QueryClient();
 
 const placeholderRoutes = [
-  { path: "/map", title: "Map", description: "Full GPS navigation with heritage routes & buildings." },
-  { path: "/explore-nearby", title: "Explore Nearby", description: "Discover heritage points, food spots & public spaces around you." },
-  
-  
   { path: "/photo-archive", title: "Photo Archive", description: "Visual documentation — old vs current photographs." },
   { path: "/about", title: "About", description: "Grading system, heritage logic & thesis interpretation." },
 ];
@@ -34,7 +29,6 @@ const placeholderRoutes = [
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
       <Sonner />
       <BrowserRouter>
         <Routes>

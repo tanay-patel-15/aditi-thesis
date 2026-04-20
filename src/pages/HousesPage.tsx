@@ -84,7 +84,6 @@ const gradeDetails: Record<string, GradeInfo> = {
   },
 };
 
-const houses = heritageHouses;
 
 const container = {
   hidden: { opacity: 0 },
@@ -105,7 +104,7 @@ const HousesPage = () => {
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    return houses.filter((h) => {
+    return heritageHouses.filter((h) => {
       const matchesSearch =
         h.name.toLowerCase().includes(search.toLowerCase()) ||
         h.location.toLowerCase().includes(search.toLowerCase());

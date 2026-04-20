@@ -22,7 +22,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { stayPackages, type StayPackage } from "@/data/stayPackages";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 type Step = "package" | "dates" | "details" | "confirm";
 
@@ -77,7 +77,7 @@ const BookingPage = () => {
 
   const handleConfirm = () => {
     setBooked(true);
-    toast({ title: "Booking Confirmed!", description: "We'll send you a confirmation email shortly." });
+    toast.success("Booking Confirmed!");
   };
 
   if (booked) {

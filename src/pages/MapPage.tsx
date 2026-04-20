@@ -3,7 +3,7 @@ import { ArrowLeft, Locate, MapPin, Star, X, Navigation } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -53,17 +53,16 @@ const PROXIMITY_RADIUS = 80; // meters
 
 // --- Sub-components ---
 
-const LocateButton = ({ onLocated }: { onLocated: (lat: number, lng: number) => void }) => {
+// LocateButton only triggers the map to pan/zoom to the user — UserLocationTracker
+// handles the locationfound event for proximity logic to avoid double-firing.
+const LocateButton = () => {
   const map = useMap();
   const [locating, setLocating] = useState(false);
 
   const handleLocate = () => {
     setLocating(true);
     map.locate({ setView: true, maxZoom: 17 });
-    map.once("locationfound", (e) => {
-      setLocating(false);
-      onLocated(e.latlng.lat, e.latlng.lng);
-    });
+    map.once("locationfound", () => setLocating(false));
     map.once("locationerror", () => setLocating(false));
   };
 
@@ -245,15 +244,17 @@ const MapPage = () => {
     }
   };
 
-  // Compute nearby IDs for highlight
-  const nearbyIds = new Set<string>();
-  if (walkMode && userPos) {
-    for (const h of heritageHouses) {
-      if (getDistanceMeters(userPos.lat, userPos.lng, h.lat, h.lng) < PROXIMITY_RADIUS) {
-        nearbyIds.add(h.id);
+  const nearbyIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (walkMode && userPos) {
+      for (const h of heritageHouses) {
+        if (getDistanceMeters(userPos.lat, userPos.lng, h.lat, h.lng) < PROXIMITY_RADIUS) {
+          ids.add(h.id);
+        }
       }
     }
-  }
+    return ids;
+  }, [walkMode, userPos]);
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -378,7 +379,7 @@ const MapPage = () => {
             </Marker>
           ))}
           <UserLocationTracker onLocationUpdate={handleLocationUpdate} />
-          <LocateButton onLocated={(lat, lng) => handleLocationUpdate(lat, lng)} />
+          <LocateButton />
         </MapContainer>
 
         {/* Legend */}
