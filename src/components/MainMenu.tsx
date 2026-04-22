@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import UpcomingEvents from "@/components/UpcomingEvents";
@@ -70,6 +71,17 @@ const item = {
 
 const MainMenu = () => {
   const navigate = useNavigate();
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startPress = () => {
+    pressTimer.current = setTimeout(() => navigate("/admin"), 700);
+  };
+  const cancelPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -77,7 +89,19 @@ const MainMenu = () => {
       <div className="relative overflow-hidden bg-heritage-deep px-6 pt-10 pb-8">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_30%_50%,hsl(var(--heritage-gold)),transparent_70%)]" />
         <div className="relative flex items-center gap-4">
-          <img src={logo} alt="Pol Experience" className="w-16 h-16 object-contain rounded-lg" />
+          <img
+            src={logo}
+            alt="Pol Experience"
+            className="w-16 h-16 object-contain rounded-lg select-none"
+            draggable={false}
+            onMouseDown={startPress}
+            onMouseUp={cancelPress}
+            onMouseLeave={cancelPress}
+            onTouchStart={startPress}
+            onTouchEnd={cancelPress}
+            onTouchCancel={cancelPress}
+            onContextMenu={(e) => e.preventDefault()}
+          />
           <div>
             <h1 className="text-2xl font-bold text-heritage-cream">Pol Experience</h1>
             <p className="text-heritage-sand/80 text-sm font-body">વડની ડાળો · Heritage Walks</p>

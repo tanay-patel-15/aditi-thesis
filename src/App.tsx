@@ -18,6 +18,8 @@ import WalkNowPage from "./pages/WalkNowPage.tsx";
 import ShopPage from "./pages/ShopPage.tsx";
 import CoworkingBookingPage from "./pages/CoworkingBookingPage.tsx";
 import MyBookingsPage from "./pages/MyBookingsPage.tsx";
+import PaymentPage from "./pages/PaymentPage.tsx";
+import AdminPage from "./pages/AdminPage.tsx";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +48,8 @@ const App = () => (
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/book-coworking" element={<CoworkingBookingPage />} />
           <Route path="/my-bookings" element={<MyBookingsPage />} />
+          <Route path="/payment/:refId" element={<PaymentPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           {placeholderRoutes.map((r) => (
             <Route key={r.path} path={r.path} element={<PlaceholderPage title={r.title} description={r.description} />} />
           ))}
