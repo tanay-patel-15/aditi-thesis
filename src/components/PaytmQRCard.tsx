@@ -18,14 +18,18 @@ const PaytmQRCard = ({ amount, refId }: PaytmQRCardProps) => {
         </div>
       </div>
 
-      <div className="flex items-center justify-center bg-heritage-cream py-6">
-        <div className="bg-white p-3 rounded-lg border border-border">
-          <img
-            src={paytmQR}
-            alt="Paytm QR code"
-            className="w-48 h-48 object-contain"
-          />
-        </div>
+      <div className="bg-white px-4 pt-4 pb-3">
+        <img
+          src={paytmQR}
+          alt="Paytm QR code — Aditi Ashish Parikh"
+          className="w-full object-contain rounded-lg"
+        />
+        <p className="text-center text-sm font-semibold text-foreground mt-3 select-all tracking-wide">
+          9974095435@ptaxis
+        </p>
+        <p className="text-center text-[11px] text-muted-foreground font-body mt-0.5">
+          Tap the UPI ID above to select &amp; copy
+        </p>
       </div>
 
       <div className="px-4 py-3 border-t border-border">
