@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -15,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { stayPackages } from "@/data/stayPackages";
+import { CafeMenuSheet } from "@/components/CafeMenuSheet";
 
 interface IndividualExperience {
   id: string;
@@ -51,7 +53,7 @@ const individualExperiences: IndividualExperience[] = [
 const stayAmenities = [
   { icon: <BedDouble className="w-5 h-5" />, label: "Heritage Stay", desc: "Rooms in a restored pol house", whatsapp: "Hi! I'm interested in a heritage stay at the pol house. Please share availability and rates." },
   { icon: <Wifi className="w-5 h-5" />, label: "Co-working Space", desc: "Ground floor workspace", linkedExp: "coworking" },
-  { icon: <Coffee className="w-5 h-5" />, label: "Brewery & Café", desc: "In-house craft brewery", whatsapp: "Hi! I'd like to know more about the Brewery & Café facility at the heritage stay." },
+  { icon: <Coffee className="w-5 h-5" />, label: "Brewery & Café", desc: "In-house craft brewery", openMenu: true as const },
   { icon: <Clock className="w-5 h-5" />, label: "Flexible Duration", desc: "3 days to 1 month", whatsapp: "Hi! I'd like to know about flexible stay durations (3 days to 1 month). What are the options?" },
 ];
 
@@ -67,6 +69,7 @@ const item = {
 
 const ExperiencePackagesPage = () => {
   const navigate = useNavigate();
+  const [cafeMenuOpen, setCafeMenuOpen] = useState(false);
 
   const handleExperienceClick = (exp: IndividualExperience) => {
     if (exp.route) {
@@ -155,10 +158,12 @@ const ExperiencePackagesPage = () => {
           <div className="grid grid-cols-2 gap-2.5">
             {stayAmenities.map((a) => {
               const handleClick = () => {
-                if (a.linkedExp) {
+                if ("openMenu" in a && a.openMenu) {
+                  setCafeMenuOpen(true);
+                } else if ("linkedExp" in a && a.linkedExp) {
                   const matched = individualExperiences.find((e) => e.id === a.linkedExp);
                   if (matched) handleExperienceClick(matched);
-                } else if (a.whatsapp) {
+                } else if ("whatsapp" in a && a.whatsapp) {
                   window.open(
                     "https://wa.me/919974095435?text=" + encodeURIComponent(a.whatsapp),
                     "_blank"
@@ -278,6 +283,8 @@ const ExperiencePackagesPage = () => {
           ))}
         </div>
       </motion.div>
+
+      <CafeMenuSheet open={cafeMenuOpen} onOpenChange={setCafeMenuOpen} />
     </div>
   );
 };

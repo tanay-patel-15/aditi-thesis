@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/popover";
 import { stayPackages, type StayPackage } from "@/data/stayPackages";
 import { toast } from "sonner";
+import { createPendingPayment, paymentMode } from "@/lib/payment";
 
 type Step = "package" | "dates" | "details" | "confirm";
 
@@ -48,6 +49,7 @@ const BookingPage = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [booked, setBooked] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const checkOut = checkIn && selectedPkg ? addDays(checkIn, selectedPkg.days) : undefined;
 
@@ -75,7 +77,35 @@ const BookingPage = () => {
     else navigate("/plan-walk");
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (!selectedPkg || !checkIn || !checkOut) return;
+
+    if (paymentMode === "manual") {
+      setSubmitting(true);
+      try {
+        const refId = await createPendingPayment({
+          bookingType: "stay",
+          bookingDetails: {
+            packageId: selectedPkg.id,
+            packageLabel: selectedPkg.duration,
+            checkIn: format(checkIn, "yyyy-MM-dd"),
+            checkOut: format(checkOut, "yyyy-MM-dd"),
+            guests,
+          },
+          customerName: name,
+          customerEmail: email,
+          customerPhone: phone,
+          amount: selectedPkg.totalPrice,
+        });
+        navigate(`/payment/${refId}`);
+      } catch {
+        toast.error("Could not start booking. Please try again.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     setBooked(true);
     toast.success("Booking Confirmed!");
   };
@@ -398,16 +428,16 @@ const BookingPage = () => {
         )}
         <button
           onClick={step === "confirm" ? handleConfirm : nextStep}
-          disabled={!canProceed()}
+          disabled={!canProceed() || submitting}
           className={cn(
             "w-full py-3.5 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2",
-            canProceed()
+            canProceed() && !submitting
               ? "bg-primary text-primary-foreground hover:bg-primary/90"
               : "bg-muted text-muted-foreground cursor-not-allowed"
           )}
         >
-          {step === "confirm" ? "Confirm Booking" : "Continue"}
-          {step !== "confirm" && <ChevronRight className="w-4 h-4" />}
+          {submitting ? "Processing…" : step === "confirm" ? "Confirm & Pay" : "Continue"}
+          {step !== "confirm" && !submitting && <ChevronRight className="w-4 h-4" />}
         </button>
       </div>
     </div>

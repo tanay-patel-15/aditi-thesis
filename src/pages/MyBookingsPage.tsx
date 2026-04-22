@@ -12,6 +12,7 @@ import {
   Clock,
   Users,
   MapPin,
+  BedDouble,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,20 @@ interface CoworkingBooking {
   duration_days: number;
   seats: number;
   created_at: string;
+  status: "confirmed" | "pending_verification";
+  ref_id?: string;
+}
+
+interface StayBooking {
+  id: string;
+  name: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  packageLabel: string;
+  created_at: string;
+  status: "confirmed" | "pending_verification";
+  ref_id: string;
 }
 
 interface EventBooking {
@@ -51,6 +66,7 @@ const MyBookingsPage = () => {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [coworkingBookings, setCoworkingBookings] = useState<CoworkingBooking[]>([]);
+  const [stayBookings, setStayBookings] = useState<StayBooking[]>([]);
   const [eventBookings, setEventBookings] = useState<EventBooking[]>([]);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
 
@@ -63,7 +79,7 @@ const MyBookingsPage = () => {
 
     setLoading(true);
     try {
-      const [cwRes, evRes] = await Promise.all([
+      const [cwRes, evRes, payRes] = await Promise.all([
         supabase
           .from("coworking_bookings")
           .select("id, name, date, duration_days, seats, created_at")
@@ -74,9 +90,54 @@ const MyBookingsPage = () => {
           .select("id, name, guests, created_at, event_id")
           .eq("phone", trimmed)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("pending_payments")
+          .select("id, ref_id, booking_type, booking_details, customer_name, status, created_at")
+          .eq("customer_phone", trimmed)
+          .in("status", ["confirmed", "pending_verification"])
+          .order("created_at", { ascending: false }),
       ]);
 
-      setCoworkingBookings(cwRes.data || []);
+      // Legacy coworking_bookings (direct inserts from razorpay/old flow)
+      const legacyCw: CoworkingBooking[] = (cwRes.data || []).map((b) => ({
+        ...b,
+        status: "confirmed" as const,
+      }));
+
+      // pending_payments — split by booking_type
+      const paidCw: CoworkingBooking[] = [];
+      const paidStay: StayBooking[] = [];
+      for (const p of payRes.data || []) {
+        const details = (p.booking_details || {}) as Record<string, unknown>;
+        const status = p.status as "confirmed" | "pending_verification";
+        if (p.booking_type === "coworking") {
+          paidCw.push({
+            id: p.id,
+            name: p.customer_name,
+            date: String(details.startDate ?? ""),
+            duration_days: Number(details.durationDays ?? 1),
+            seats: Number(details.seats ?? 1),
+            created_at: p.created_at,
+            status,
+            ref_id: p.ref_id,
+          });
+        } else if (p.booking_type === "stay") {
+          paidStay.push({
+            id: p.id,
+            name: p.customer_name,
+            checkIn: String(details.checkIn ?? ""),
+            checkOut: String(details.checkOut ?? ""),
+            guests: Number(details.guests ?? 1),
+            packageLabel: String(details.packageLabel ?? "Stay"),
+            created_at: p.created_at,
+            status,
+            ref_id: p.ref_id,
+          });
+        }
+      }
+
+      setCoworkingBookings([...paidCw, ...legacyCw]);
+      setStayBookings(paidStay);
 
       // Fetch event details for event bookings
       if (evRes.data && evRes.data.length > 0) {
@@ -108,22 +169,26 @@ const MyBookingsPage = () => {
   };
 
   const isUpcoming = (dateStr: string) => {
+    if (!dateStr) return false;
     const d = parseISO(dateStr);
     return !isPast(d) || isToday(d);
   };
 
   const upcomingCoworking = coworkingBookings.filter((b) => isUpcoming(b.date));
   const pastCoworking = coworkingBookings.filter((b) => !isUpcoming(b.date));
+  const upcomingStay = stayBookings.filter((b) => isUpcoming(b.checkIn));
+  const pastStay = stayBookings.filter((b) => !isUpcoming(b.checkIn));
   const upcomingEvents = eventBookings.filter((b) => b.event && isUpcoming(b.event.date));
   const pastEvents = eventBookings.filter((b) => !b.event || !isUpcoming(b.event.date));
 
-  const hasUpcoming = upcomingCoworking.length > 0 || upcomingEvents.length > 0;
-  const hasPast = pastCoworking.length > 0 || pastEvents.length > 0;
-  const totalBookings = coworkingBookings.length + eventBookings.length;
+  const hasUpcoming =
+    upcomingCoworking.length > 0 || upcomingStay.length > 0 || upcomingEvents.length > 0;
+  const hasPast = pastCoworking.length > 0 || pastStay.length > 0 || pastEvents.length > 0;
+  const totalBookings =
+    coworkingBookings.length + stayBookings.length + eventBookings.length;
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-heritage-deep text-heritage-cream">
         <div className="flex items-center gap-3 px-4 py-4">
           <button onClick={() => navigate(-1)} className="p-1 rounded-lg hover:bg-white/10">
@@ -137,7 +202,6 @@ const MyBookingsPage = () => {
       </div>
 
       <div className="px-5 py-6 max-w-lg mx-auto space-y-6">
-        {/* Phone Search */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -164,7 +228,6 @@ const MyBookingsPage = () => {
           </div>
         </motion.div>
 
-        {/* Results */}
         <AnimatePresence mode="wait">
           {searched && (
             <motion.div
@@ -189,7 +252,6 @@ const MyBookingsPage = () => {
                 </div>
               ) : (
                 <>
-                  {/* Tabs */}
                   <div className="flex gap-1 p-1 bg-muted rounded-lg">
                     <button
                       onClick={() => setTab("upcoming")}
@@ -199,7 +261,7 @@ const MyBookingsPage = () => {
                           : "text-muted-foreground"
                       }`}
                     >
-                      Upcoming {hasUpcoming && `(${upcomingCoworking.length + upcomingEvents.length})`}
+                      Upcoming {hasUpcoming && `(${upcomingCoworking.length + upcomingStay.length + upcomingEvents.length})`}
                     </button>
                     <button
                       onClick={() => setTab("past")}
@@ -209,7 +271,7 @@ const MyBookingsPage = () => {
                           : "text-muted-foreground"
                       }`}
                     >
-                      Past {hasPast && `(${pastCoworking.length + pastEvents.length})`}
+                      Past {hasPast && `(${pastCoworking.length + pastStay.length + pastEvents.length})`}
                     </button>
                   </div>
 
@@ -226,6 +288,9 @@ const MyBookingsPage = () => {
                           {!hasUpcoming && (
                             <p className="text-center text-sm text-muted-foreground py-8">No upcoming bookings</p>
                           )}
+                          {upcomingStay.map((b) => (
+                            <StayCard key={b.id} booking={b} />
+                          ))}
                           {upcomingCoworking.map((b) => (
                             <CoworkingCard key={b.id} booking={b} />
                           ))}
@@ -238,6 +303,9 @@ const MyBookingsPage = () => {
                           {!hasPast && (
                             <p className="text-center text-sm text-muted-foreground py-8">No past bookings</p>
                           )}
+                          {pastStay.map((b) => (
+                            <StayCard key={b.id} booking={b} isPast />
+                          ))}
                           {pastCoworking.map((b) => (
                             <CoworkingCard key={b.id} booking={b} isPast />
                           ))}
@@ -258,6 +326,51 @@ const MyBookingsPage = () => {
   );
 };
 
+const StatusBadge = ({ status }: { status: "confirmed" | "pending_verification" }) => {
+  if (status === "confirmed") {
+    return (
+      <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+        Confirmed
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+      Verifying
+    </span>
+  );
+};
+
+const StayCard = ({ booking, isPast }: { booking: StayBooking; isPast?: boolean }) => (
+  <motion.div
+    variants={item}
+    initial="hidden"
+    animate="show"
+    className={`p-4 rounded-xl border bg-card space-y-2 ${isPast ? "opacity-60" : ""}`}
+  >
+    <div className="flex items-center gap-2">
+      <div className="w-8 h-8 rounded-lg bg-heritage-terracotta/10 flex items-center justify-center">
+        <BedDouble className="w-4 h-4 text-heritage-terracotta" />
+      </div>
+      <div className="flex-1">
+        <p className="font-display font-semibold text-sm">{booking.packageLabel}</p>
+        <p className="text-xs text-muted-foreground">{booking.name} · {booking.ref_id}</p>
+      </div>
+      {!isPast && <StatusBadge status={booking.status} />}
+    </div>
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1">
+        <CalendarCheck className="w-3 h-3" />
+        {format(parseISO(booking.checkIn), "dd MMM")} – {format(parseISO(booking.checkOut), "dd MMM yyyy")}
+      </span>
+      <span className="flex items-center gap-1">
+        <Users className="w-3 h-3" />
+        {booking.guests} guest{booking.guests > 1 ? "s" : ""}
+      </span>
+    </div>
+  </motion.div>
+);
+
 const CoworkingCard = ({ booking, isPast }: { booking: CoworkingBooking; isPast?: boolean }) => (
   <motion.div
     variants={item}
@@ -271,18 +384,16 @@ const CoworkingCard = ({ booking, isPast }: { booking: CoworkingBooking; isPast?
       </div>
       <div className="flex-1">
         <p className="font-display font-semibold text-sm">Co-working Space</p>
-        <p className="text-xs text-muted-foreground">{booking.name}</p>
+        <p className="text-xs text-muted-foreground">
+          {booking.name}{booking.ref_id ? ` · ${booking.ref_id}` : ""}
+        </p>
       </div>
-      {!isPast && (
-        <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-          Confirmed
-        </span>
-      )}
+      {!isPast && <StatusBadge status={booking.status} />}
     </div>
     <div className="flex gap-4 text-xs text-muted-foreground">
       <span className="flex items-center gap-1">
         <CalendarCheck className="w-3 h-3" />
-        {format(parseISO(booking.date), "dd MMM yyyy")}
+        {booking.date ? format(parseISO(booking.date), "dd MMM yyyy") : "—"}
       </span>
       <span className="flex items-center gap-1">
         <Clock className="w-3 h-3" />

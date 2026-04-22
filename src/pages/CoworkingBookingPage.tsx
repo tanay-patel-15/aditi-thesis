@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createPendingPayment, paymentMode } from "@/lib/payment";
 
 interface CoworkingPlan {
   id: string;
@@ -91,6 +92,33 @@ const CoworkingBookingPage = () => {
   const handleConfirm = async () => {
     if (!selectedPlan || !startDate) return;
     setSubmitting(true);
+
+    if (paymentMode === "manual") {
+      try {
+        const refId = await createPendingPayment({
+          bookingType: "coworking",
+          bookingDetails: {
+            planId: selectedPlan.id,
+            planLabel: selectedPlan.label,
+            durationDays: selectedPlan.days,
+            startDate: format(startDate, "yyyy-MM-dd"),
+            seats,
+            notes: notes || null,
+          },
+          customerName: name,
+          customerEmail: email || "",
+          customerPhone: phone,
+          amount: selectedPlan.total * seats,
+        });
+        navigate(`/payment/${refId}`);
+      } catch {
+        toast.error("Could not start booking. Please try WhatsApp instead.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     try {
       const { error } = await supabase.from("coworking_bookings").insert({
         name,
@@ -444,7 +472,7 @@ const CoworkingBookingPage = () => {
               : "bg-muted text-muted-foreground cursor-not-allowed"
           )}
         >
-          {submitting ? "Booking…" : step === "confirm" ? "Confirm Booking" : "Continue"}
+          {submitting ? "Booking…" : step === "confirm" ? "Confirm & Pay" : "Continue"}
           {step !== "confirm" && !submitting && <ChevronRight className="w-4 h-4" />}
         </button>
       </div>
