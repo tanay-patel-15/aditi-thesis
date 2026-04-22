@@ -95,7 +95,7 @@ const BookingPage = () => {
           customerName: name,
           customerEmail: email,
           customerPhone: phone,
-          amount: selectedPkg.totalPrice,
+          amount: selectedPkg.totalPrice * guests,
         });
         navigate(`/payment/${refId}`);
       } catch {
@@ -405,9 +405,11 @@ const BookingPage = () => {
                 </div>
 
                 <div className="border-t border-border pt-3 flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground font-body">Total</span>
+                  <span className="text-sm text-muted-foreground font-body">
+                    Total ({guests} {guests === 1 ? "guest" : "guests"})
+                  </span>
                   <span className="text-2xl font-display font-bold text-foreground">
-                    ₹{selectedPkg.totalPrice.toLocaleString("en-IN")}
+                    ₹{(selectedPkg.totalPrice * guests).toLocaleString("en-IN")}
                   </span>
                 </div>
               </div>
@@ -420,9 +422,11 @@ const BookingPage = () => {
       <div className="fixed bottom-0 left-0 right-0 px-5 py-4 bg-background border-t border-border">
         {selectedPkg && step !== "package" && (
           <div className="flex justify-between items-center mb-3">
-            <span className="text-xs text-muted-foreground font-body">{selectedPkg.duration}</span>
+            <span className="text-xs text-muted-foreground font-body">
+              {selectedPkg.duration} × {guests} {guests === 1 ? "guest" : "guests"}
+            </span>
             <span className="font-display font-bold text-foreground">
-              ₹{selectedPkg.totalPrice.toLocaleString("en-IN")}
+              ₹{(selectedPkg.totalPrice * guests).toLocaleString("en-IN")}
             </span>
           </div>
         )}
