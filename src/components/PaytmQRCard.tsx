@@ -1,5 +1,5 @@
 import { Smartphone, Camera, FileText } from "lucide-react";
-import paytmQR from "@/assets/paytm-qr.svg";
+import paytmQR from "@/assets/paytm-qr.png";
 
 interface PaytmQRCardProps {
   amount: number;
