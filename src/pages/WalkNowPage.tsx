@@ -1,418 +1,917 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Navigation,
-  MapPin,
-  ChevronRight,
-  ChevronLeft,
-  Locate,
-  CheckCircle2,
-  Circle,
-  AlertCircle,
-} from "lucide-react";
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
-import L from "leaflet";
+import { ArrowLeft, Copy, Home, Locate, Pause, Play, RotateCcw, Wrench, X } from "lucide-react";
+import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
+import L, { type LeafletMouseEvent, type Polyline as LeafletPolyline } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Badge } from "@/components/ui/badge";
+import { AnimatePresence, motion } from "framer-motion";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import {
-  heritageHouses,
-  gradeColors,
-  getDistanceMeters,
-  type HeritageHouse,
-} from "@/data/heritageHouses";
+  getEditableRouteBounds,
+  getRouteGeometry,
+  positionAtMeters,
+  segmentWaypoints,
+  walkStops,
+  type WalkStop,
+} from "@/data/walkRoute";
+import { getDistanceMeters } from "@/data/heritageHouses";
+import { FigurineMarker, FigurineStyles } from "@/components/walk/FigurineMarker";
+import { StopInfoDialog } from "@/components/walk/StopInfoDialog";
 
-// Only pol-house + landmark buildings in the walking precinct
-const walkStops = heritageHouses.filter(
-  (h) => h.category === "pol-house" || h.category === "landmark"
-);
+type Mode = "idle" | "preview" | "live" | "complete";
+type WaypointMap = Record<string, [number, number][]>;
 
-// Sort by rough walking order (south to north, west to east)
-const sortedStops = [...walkStops].sort((a, b) => {
-  const latDiff = a.lat - b.lat;
-  if (Math.abs(latDiff) > 0.001) return latDiff;
-  return a.lng - b.lng;
-});
+const PREVIEW_DURATION_MS = 30_000;
+const LIVE_ARRIVAL_RADIUS_M = 30;
+const ADMIN_SESSION_KEY = "admin_authed";
 
-const ARRIVAL_RADIUS = 30; // meters
+const stopMarkerIcon = (
+  stop: WalkStop,
+  state: "pending" | "active" | "visited",
+  editable = false
+) => {
+  const fill =
+    state === "visited"
+      ? "hsl(90 20% 35%)"
+      : state === "active"
+        ? "hsl(43 80% 55%)"
+        : editable
+          ? "hsl(18 60% 48%)"
+          : "hsl(40 50% 95%)";
+  const stroke = "hsl(20 45% 22%)";
+  const textColor = editable ? "hsl(40 50% 95%)" : "hsl(20 45% 22%)";
+  const size = editable ? 30 : state === "active" ? 34 : 28;
+  const pulse =
+    state === "active"
+      ? "animation: walkNowStopPulse 1.8s ease-out infinite; border-radius: 50%;"
+      : "";
 
-const stopIcon = (active: boolean, visited: boolean) =>
-  new L.DivIcon({
-    className: "",
-    html: `<div style="width:${active ? 36 : 26}px;height:${active ? 36 : 26}px;border-radius:50%;background:${visited ? "#059669" : active ? "#D97706" : "#7C3AED"};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);${active ? "animation:pulse 2s infinite;" : ""}display:flex;align-items:center;justify-content:center;color:white;font-size:${active ? 14 : 11}px;font-weight:bold;">${visited ? "✓" : ""}</div>`,
-    iconSize: [active ? 36 : 26, active ? 36 : 26],
-    iconAnchor: [active ? 18 : 13, active ? 18 : 13],
+  return L.divIcon({
+    className: "walk-now-stop-marker",
+    html: `
+      <div style="
+        width:${size}px;height:${size}px;border-radius:50%;
+        background:${fill};border:2.5px solid ${stroke};
+        box-shadow:0 2px 6px rgba(0,0,0,0.25);
+        display:flex;align-items:center;justify-content:center;
+        font-family:'Playfair Display',serif;font-weight:700;
+        color:${textColor};font-size:${editable ? 12 : state === "active" ? 15 : 13}px;
+        ${pulse}
+      ">${stop.number}</div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
+};
 
-const userIcon = new L.DivIcon({
-  className: "",
-  html: `<div style="width:18px;height:18px;border-radius:50%;background:#3B82F6;border:3px solid white;box-shadow:0 0 0 4px rgba(59,130,246,0.3);"></div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
+const waypointMarkerIcon = new L.DivIcon({
+  className: "walk-now-waypoint-marker",
+  html: `
+    <div style="
+      width:16px;height:16px;border-radius:999px;
+      background:hsl(43 80% 55%);
+      border:2px solid hsl(20 45% 22%);
+      box-shadow:0 2px 6px rgba(0,0,0,0.2);
+    "></div>
+  `,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
 });
 
-function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
+const midpointMarkerIcon = new L.DivIcon({
+  className: "walk-now-midpoint-marker",
+  html: `
+    <div style="
+      width:12px;height:12px;border-radius:999px;
+      background:hsl(40 50% 95%);
+      border:2px solid hsl(20 45% 22%);
+      box-shadow:0 1px 4px rgba(0,0,0,0.16);
+    "></div>
+  `,
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
+});
+
+function getSegmentKey(fromStop: WalkStop, toStop: WalkStop) {
+  return `${fromStop.number}-${toStop.number}`;
 }
 
-function getBearing(lat1: number, lng1: number, lat2: number, lng2: number): string {
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const y = Math.sin(dLng) * Math.cos((lat2 * Math.PI) / 180);
-  const x =
-    Math.cos((lat1 * Math.PI) / 180) * Math.sin((lat2 * Math.PI) / 180) -
-    Math.sin((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.cos(dLng);
-  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
-  const normalized = (bearing + 360) % 360;
-  if (normalized < 45 || normalized >= 315) return "North";
-  if (normalized < 135) return "East";
-  if (normalized < 225) return "South";
-  return "West";
+function formatLatLng([lat, lng]: [number, number]) {
+  return `[${lat.toFixed(6)}, ${lng.toFixed(6)}]`;
 }
 
-/** Keeps the map centered on the active stop or user */
-const MapUpdater = ({
-  center,
-  zoom,
+function cloneWaypoints(source: WaypointMap) {
+  return Object.fromEntries(
+    Object.entries(source).map(([key, points]) => [key, points.map(([lat, lng]) => [lat, lng] as [number, number])])
+  ) as WaypointMap;
+}
+
+function pointToSegmentDistance(
+  point: [number, number],
+  start: [number, number],
+  end: [number, number]
+) {
+  const [px, py] = point;
+  const [ax, ay] = start;
+  const [bx, by] = end;
+
+  const dx = bx - ax;
+  const dy = by - ay;
+  if (dx === 0 && dy === 0) {
+    return Math.hypot(px - ax, py - ay);
+  }
+
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+function getInsertionIndex(points: [number, number][], candidate: [number, number]) {
+  let bestIndex = 1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const distance = pointToSegmentDistance(candidate, points[index], points[index + 1]);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index + 1;
+    }
+  }
+
+  return bestIndex;
+}
+
+function FitRouteBounds({
+  bounds,
+  fitSignal,
 }: {
-  center: [number, number];
-  zoom: number;
-}) => {
+  bounds: { south: number; west: number; north: number; east: number };
+  fitSignal: number;
+}) {
   const map = useMap();
+
   useEffect(() => {
-    map.flyTo(center, zoom, { duration: 0.8 });
-  }, [center[0], center[1], zoom]);
-  return null;
-};
-
-const LocateOnMap = ({ onLocated }: { onLocated: () => void }) => {
-  const map = useMap();
-  return (
-    <button
-      onClick={() => {
-        map.locate({ setView: true, maxZoom: 18 });
-        onLocated();
-      }}
-      className="absolute bottom-28 right-4 z-[1000] w-11 h-11 rounded-full bg-card border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-accent transition-colors"
-      aria-label="My location"
-    >
-      <Locate className="w-5 h-5" />
-    </button>
-  );
-};
-
-type WalkState = "preview" | "active" | "complete";
-
-const WalkNowPage = () => {
-  const navigate = useNavigate();
-  const [walkState, setWalkState] = useState<WalkState>("preview");
-  const [currentStopIdx, setCurrentStopIdx] = useState(0);
-  const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set());
-  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [gpsError, setGpsError] = useState(false);
-
-  const currentStop = sortedStops[currentStopIdx];
-  const nextStop = currentStopIdx < sortedStops.length - 1 ? sortedStops[currentStopIdx + 1] : null;
-
-  // GPS tracking
-  useEffect(() => {
-    if (walkState !== "active") return;
-    if (!navigator.geolocation) {
-      setGpsError(true);
-      return;
-    }
-    const id = navigator.geolocation.watchPosition(
-      (pos) => {
-        setGpsError(false);
-        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      },
-      () => setGpsError(true),
-      { enableHighAccuracy: true, maximumAge: 3000 }
+    map.fitBounds(
+      [
+        [bounds.south, bounds.west],
+        [bounds.north, bounds.east],
+      ],
+      { padding: [60, 60], animate: false }
     );
-    return () => navigator.geolocation.clearWatch(id);
-  }, [walkState]);
+  }, [fitSignal, map]);
 
-  // Auto-detect arrival
+  return null;
+}
+
+export default function WalkNowPage() {
+  const navigate = useNavigate();
+
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editableStops, setEditableStops] = useState<WalkStop[]>(() =>
+    walkStops.map((stop) => ({ ...stop }))
+  );
+  const [editableWaypoints, setEditableWaypoints] = useState<WaypointMap>(() =>
+    cloneWaypoints(segmentWaypoints)
+  );
+  const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
+  const [fitSignal, setFitSignal] = useState(0);
+
+  const geometry = useMemo(
+    () => getRouteGeometry(editableStops, editableWaypoints),
+    [editableStops, editableWaypoints]
+  );
+  const routeBounds = useMemo(
+    () => getEditableRouteBounds(editableStops, editableWaypoints),
+    [editableStops, editableWaypoints]
+  );
+
+  const [mode, setMode] = useState<Mode>("idle");
+  const [figurinePos, setFigurinePos] = useState<[number, number]>([
+    editableStops[0].lat,
+    editableStops[0].lng,
+  ]);
+  const [isMoving, setIsMoving] = useState(false);
+  const [activeStop, setActiveStop] = useState<WalkStop | null>(null);
+  const [visitedStopNumbers, setVisitedStopNumbers] = useState<Set<number>>(new Set());
+  const [progressMeters, setProgressMeters] = useState(0);
+
+  const previewPausedRef = useRef(true);
+  const baselineMetersRef = useRef(0);
+  const baselineTimeRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const activeStopRef = useRef<WalkStop | null>(null);
+
   useEffect(() => {
-    if (walkState !== "active" || !userPos) return;
-    const dist = getDistanceMeters(userPos.lat, userPos.lng, currentStop.lat, currentStop.lng);
-    if (dist <= ARRIVAL_RADIUS && !visitedIds.has(currentStop.id)) {
-      setVisitedIds((prev) => new Set(prev).add(currentStop.id));
+    activeStopRef.current = activeStop;
+  }, [activeStop]);
+
+  const stopPreviewLoop = () => {
+    previewPausedRef.current = true;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
-  }, [userPos, currentStop, walkState]);
-
-  const distanceToStop = useMemo(() => {
-    if (!userPos) return null;
-    return getDistanceMeters(userPos.lat, userPos.lng, currentStop.lat, currentStop.lng);
-  }, [userPos, currentStop]);
-
-  const directionToStop = useMemo(() => {
-    if (!userPos) return null;
-    return getBearing(userPos.lat, userPos.lng, currentStop.lat, currentStop.lng);
-  }, [userPos, currentStop]);
-
-  const routeLine: [number, number][] = sortedStops.map((s) => [s.lat, s.lng]);
-
-  const mapCenter: [number, number] = useMemo(() => {
-    if (walkState === "active" && userPos) return [userPos.lat, userPos.lng];
-    return [currentStop.lat, currentStop.lng];
-  }, [walkState, userPos, currentStop]);
-
-  const goNext = useCallback(() => {
-    if (currentStopIdx < sortedStops.length - 1) {
-      setVisitedIds((prev) => new Set(prev).add(currentStop.id));
-      setCurrentStopIdx((i) => i + 1);
-    } else {
-      setVisitedIds((prev) => new Set(prev).add(currentStop.id));
-      setWalkState("complete");
-    }
-  }, [currentStopIdx, currentStop]);
-
-  const goPrev = useCallback(() => {
-    if (currentStopIdx > 0) setCurrentStopIdx((i) => i - 1);
-  }, [currentStopIdx]);
-
-  const startWalk = () => {
-    setWalkState("active");
-    setCurrentStopIdx(0);
-    setVisitedIds(new Set());
+    setIsMoving(false);
   };
 
-  return (
-    <div className="h-screen flex flex-col bg-background">
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(217,119,6,0.4); }
-          50% { box-shadow: 0 0 0 10px rgba(217,119,6,0); }
+  const stopLiveWatch = () => {
+    if (watchIdRef.current != null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  };
+
+  const resetWalk = () => {
+    stopPreviewLoop();
+    stopLiveWatch();
+    setMode("idle");
+    setFigurinePos([editableStops[0].lat, editableStops[0].lng]);
+    setActiveStop(null);
+    setVisitedStopNumbers(new Set());
+    setProgressMeters(0);
+    baselineMetersRef.current = 0;
+  };
+
+  useEffect(() => {
+    setFitSignal((value) => value + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!isEditMode) {
+      setSelectedSegmentKey(null);
+      return;
+    }
+
+    setSelectedSegmentKey((current) => {
+      if (current && editableWaypoints[current] !== undefined) return current;
+      if (routeSegments[0]) return routeSegments[0].key;
+      return null;
+    });
+  }, [editableWaypoints, isEditMode]);
+
+  useEffect(() => {
+    return () => {
+      stopPreviewLoop();
+      stopLiveWatch();
+    };
+  }, []);
+
+  const setStopPosition = (stopNumber: number, latlng: [number, number]) => {
+    setEditableStops((current) =>
+      current.map((stop) =>
+        stop.number === stopNumber ? { ...stop, lat: latlng[0], lng: latlng[1] } : stop
+      )
+    );
+  };
+
+  const setWaypointPosition = (
+    key: string,
+    waypointIndex: number,
+    latlng: [number, number]
+  ) => {
+    setEditableWaypoints((current) => ({
+      ...current,
+      [key]: (current[key] ?? []).map((point, index) => (index === waypointIndex ? latlng : point)),
+    }));
+  };
+
+  const insertWaypoint = (key: string, latlng: [number, number], points: [number, number][]) => {
+    const insertAt = getInsertionIndex(points, latlng);
+    setSelectedSegmentKey(key);
+    setEditableWaypoints((current) => {
+      const next = [...(current[key] ?? [])];
+      next.splice(Math.max(0, insertAt - 1), 0, latlng);
+      return { ...current, [key]: next };
+    });
+  };
+
+  const removeWaypoint = (key: string, waypointIndex: number) => {
+    setEditableWaypoints((current) => ({
+      ...current,
+      [key]: (current[key] ?? []).filter((_, index) => index !== waypointIndex),
+    }));
+  };
+
+  const resetEditedRoute = () => {
+    setEditableStops(walkStops.map((stop) => ({ ...stop })));
+    setEditableWaypoints(cloneWaypoints(segmentWaypoints));
+    toast.success("Route reset to the saved defaults.");
+  };
+
+  const startPreview = () => {
+    setMode("preview");
+    setFigurinePos([editableStops[0].lat, editableStops[0].lng]);
+    setVisitedStopNumbers(new Set());
+    setProgressMeters(0);
+    baselineMetersRef.current = 0;
+    setActiveStop(editableStops[0]);
+    setIsMoving(false);
+  };
+
+  const runPreviewTowardsNextStop = (fromStopNumber: number) => {
+    const nextStop = editableStops.find((stop) => stop.number === fromStopNumber + 1);
+    if (!nextStop) {
+      setMode("complete");
+      setIsMoving(false);
+      return;
+    }
+
+    const nextStopMeters = geometry.cumulativeMeters[geometry.stopIndices[nextStop.number - 1]];
+
+    previewPausedRef.current = false;
+    setIsMoving(true);
+    baselineTimeRef.current = performance.now();
+    const speed = geometry.totalMeters / PREVIEW_DURATION_MS;
+
+    const tick = () => {
+      if (previewPausedRef.current) return;
+
+      const elapsed = performance.now() - baselineTimeRef.current;
+      let meters = baselineMetersRef.current + elapsed * speed;
+
+      if (meters >= nextStopMeters) {
+        meters = nextStopMeters;
+        baselineMetersRef.current = meters;
+        setProgressMeters(meters);
+        setFigurinePos([nextStop.lat, nextStop.lng]);
+        previewPausedRef.current = true;
+        setIsMoving(false);
+        setActiveStop(nextStop);
+        rafRef.current = null;
+        return;
+      }
+
+      const { latlng } = positionAtMeters(geometry, meters);
+      setFigurinePos(latlng);
+      setProgressMeters(meters);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const startLiveWalk = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      toast.error("Geolocation is not available on this device. Try Preview Walk instead.");
+      return;
+    }
+
+    setMode("live");
+    setVisitedStopNumbers(new Set());
+    setProgressMeters(0);
+    setActiveStop(null);
+    setIsMoving(true);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setFigurinePos([latitude, longitude]);
+
+        setVisitedStopNumbers((current) => {
+          if (activeStopRef.current) return current;
+
+          for (const stop of editableStops) {
+            if (current.has(stop.number)) continue;
+            const distance = getDistanceMeters(latitude, longitude, stop.lat, stop.lng);
+            if (distance <= LIVE_ARRIVAL_RADIUS_M) {
+              setIsMoving(false);
+              setActiveStop(stop);
+              const index = geometry.stopIndices[stop.number - 1];
+              setProgressMeters(geometry.cumulativeMeters[index]);
+              return new Set(current).add(stop.number);
+            }
+          }
+
+          return current;
+        });
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          toast.error("Location permission denied. Use Preview Walk to see the route instead.");
+        } else {
+          toast.error("Couldn't get your location. Try Preview Walk instead.");
         }
-      `}</style>
+        resetWalk();
+      },
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+    );
+  };
 
-      {/* Header */}
-      <div className="px-4 pt-10 pb-3 bg-background/95 backdrop-blur-sm z-[1001] relative">
-        <div className="flex items-center justify-between mb-1">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-          {walkState === "active" && (
-            <Badge variant="outline" className="text-xs font-semibold text-primary border-primary">
-              {currentStopIdx + 1} / {sortedStops.length} stops
-            </Badge>
-          )}
-        </div>
-        <h1 className="text-xl font-display font-bold text-foreground">
-          {walkState === "complete" ? "Walk Complete! 🎉" : "Walk Now"}
-        </h1>
-        {walkState === "active" && gpsError && (
-          <div className="flex items-center gap-1.5 mt-1 text-destructive text-xs">
-            <AlertCircle className="w-3.5 h-3.5" />
-            GPS unavailable — enable location access
-          </div>
-        )}
-      </div>
+  const handleContinueFromStop = () => {
+    if (!activeStop) return;
 
-      {/* Map */}
-      <div className="flex-1 relative">
+    const stopNumber = activeStop.number;
+    setVisitedStopNumbers((current) => new Set(current).add(stopNumber));
+    setActiveStop(null);
+
+    if (stopNumber === editableStops.length) {
+      stopPreviewLoop();
+      stopLiveWatch();
+      setMode("complete");
+      setIsMoving(false);
+      setProgressMeters(geometry.totalMeters);
+      return;
+    }
+
+    if (mode === "preview") {
+      runPreviewTowardsNextStop(stopNumber);
+    } else if (mode === "live") {
+      setIsMoving(true);
+    }
+  };
+
+  const walkedPath = useMemo(() => {
+    const { path, cumulativeMeters } = geometry;
+    if (mode === "idle") return [] as [number, number][];
+
+    let index = 0;
+    while (index < cumulativeMeters.length - 1 && cumulativeMeters[index + 1] <= progressMeters) {
+      index += 1;
+    }
+
+    const prefix = path.slice(0, index + 1);
+    if (mode === "preview") return [...prefix, figurinePos];
+    return prefix;
+  }, [figurinePos, geometry, mode, progressMeters]);
+
+  const routeSegments = useMemo(
+    () =>
+      editableStops.slice(0, -1).map((fromStop, index) => {
+        const toStop = editableStops[index + 1];
+        const key = getSegmentKey(fromStop, toStop);
+        const waypoints = editableWaypoints[key] ?? [];
+        return {
+          key,
+          fromStop,
+          toStop,
+          waypoints,
+          points: [
+            [fromStop.lat, fromStop.lng],
+            ...waypoints,
+            [toStop.lat, toStop.lng],
+          ] as [number, number][],
+        };
+      }),
+    [editableStops, editableWaypoints]
+  );
+
+  const selectedSegment = routeSegments.find((segment) => segment.key === selectedSegmentKey) ?? null;
+
+  const exportJson = useMemo(() => {
+    const stopsString = editableStops
+      .map(
+        (stop) =>
+          `  {\n    number: ${stop.number},\n    name: ${JSON.stringify(stop.name)},\n    subtitle: ${JSON.stringify(stop.subtitle)},\n    lat: ${stop.lat.toFixed(6)},\n    lng: ${stop.lng.toFixed(6)},\n    description: ${JSON.stringify(stop.description ?? "")},\n  },`
+      )
+      .join("\n");
+
+    const waypointKeys = routeSegments.map((segment) => segment.key);
+    const waypointString = waypointKeys
+      .map((key) => {
+        const points = editableWaypoints[key] ?? [];
+        const formatted = points.length === 0 ? "[]" : `[${points.map((point) => formatLatLng(point)).join(", ")}]`;
+        return `  ${JSON.stringify(key)}: ${formatted},`;
+      })
+      .join("\n");
+
+    return `export const walkStops = [\n${stopsString}\n];\n\nexport const segmentWaypoints = {\n${waypointString}\n};`;
+  }, [editableStops, editableWaypoints, routeSegments]);
+
+  const copyExportJson = async () => {
+    try {
+      await navigator.clipboard.writeText(exportJson);
+      toast.success("Route JSON copied.");
+    } catch {
+      toast.error("Couldn't copy automatically. You can still select the JSON below.");
+    }
+  };
+
+  const toggleEditMode = () => {
+    if (!isEditMode) {
+      const expectedPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+      if (!expectedPassword) {
+        toast.error("Admin password not configured. Set VITE_ADMIN_PASSWORD in .env");
+        return;
+      }
+
+      const alreadyAuthed =
+        typeof window !== "undefined" &&
+        window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+
+      if (!alreadyAuthed) {
+        const enteredPassword = window.prompt("Enter admin password to edit the route:");
+        if (enteredPassword == null) return;
+        if (enteredPassword !== expectedPassword) {
+          toast.error("Incorrect admin password.");
+          return;
+        }
+        window.sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+      }
+    }
+
+    if (mode !== "idle") resetWalk();
+    setIsEditMode((current) => !current);
+    setFitSignal((value) => value + 1);
+  };
+
+  const stopMarkerState = (stop: WalkStop): "pending" | "active" | "visited" => {
+    if (visitedStopNumbers.has(stop.number)) return "visited";
+    if (activeStop?.number === stop.number) return "active";
+    return "pending";
+  };
+
+  const visitedCount = visitedStopNumbers.size;
+  const showFigurine = mode !== "idle" && !isEditMode;
+
+  return (
+    <div className="min-h-screen bg-heritage-cream relative">
+      <FigurineStyles />
+
+      <div className="fixed inset-0 z-0">
         <MapContainer
-          center={[22.2997, 73.2015]}
-          zoom={walkState === "active" ? 17 : 15}
-          className="h-full w-full z-0"
+          center={[editableStops[0].lat, editableStops[0].lng]}
+          zoom={15}
+          className="h-full w-full"
           zoomControl={false}
           attributionControl={false}
+          doubleClickZoom={!isEditMode}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <MapUpdater center={mapCenter} zoom={walkState === "active" ? 17 : 15} />
+          <FitRouteBounds bounds={routeBounds} fitSignal={fitSignal} />
 
-          {/* Route polyline */}
-          <Polyline
-            positions={routeLine}
-            pathOptions={{ color: "#7C3AED", weight: 3, opacity: 0.5, dashArray: "8 6" }}
-          />
-
-          {/* Stop markers */}
-          {sortedStops.map((stop, idx) => (
-            <Marker
-              key={stop.id}
-              position={[stop.lat, stop.lng]}
-              icon={stopIcon(idx === currentStopIdx && walkState === "active", visitedIds.has(stop.id))}
-              eventHandlers={{
-                click: () => {
-                  if (walkState === "active") setCurrentStopIdx(idx);
-                },
+          {routeSegments.map((segment) => (
+            <Polyline
+              key={`base-${segment.key}`}
+              positions={segment.points}
+              pathOptions={{
+                color: isEditMode
+                  ? segment.key === selectedSegmentKey
+                    ? "hsl(18 60% 48%)"
+                    : "hsl(210 12% 40%)"
+                  : "hsl(18 60% 48%)",
+                weight: isEditMode ? (segment.key === selectedSegmentKey ? 8 : 6) : 4,
+                opacity: isEditMode ? (segment.key === selectedSegmentKey ? 0.95 : 0.7) : 0.75,
+                dashArray: isEditMode ? undefined : "2 10",
+                lineCap: "round",
               }}
+              eventHandlers={
+                isEditMode
+                  ? {
+                      click: (event: LeafletMouseEvent) => {
+                        insertWaypoint(segment.key, [event.latlng.lat, event.latlng.lng], segment.points);
+                      },
+                      mousedown: () => {
+                        setSelectedSegmentKey(segment.key);
+                      },
+                    }
+                  : undefined
+              }
             />
           ))}
 
-          {/* User position */}
-          {userPos && <Marker position={[userPos.lat, userPos.lng]} icon={userIcon} />}
-
-          <LocateOnMap onLocated={() => {}} />
-        </MapContainer>
-
-        {/* Bottom panel */}
-        <AnimatePresence mode="wait">
-          {walkState === "preview" && (
-            <motion.div
-              key="preview"
-              initial={{ y: 200, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 200, opacity: 0 }}
-              className="absolute bottom-4 left-3 right-3 z-[1001] bg-card rounded-2xl border border-border shadow-2xl p-5"
-            >
-              <h2 className="font-display font-bold text-foreground text-lg">Heritage Precinct Walk</h2>
-              <p className="text-sm text-muted-foreground font-body mt-1 mb-3">
-                Step-by-step GPS navigation through {sortedStops.length} heritage buildings in the old city pol precinct.
-              </p>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
-                <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {sortedStops.length} stops</span>
-                <span className="flex items-center gap-1"><Navigation className="w-3.5 h-3.5" /> ~1.5 km</span>
-              </div>
-
-              {/* Stop list preview */}
-              <div className="space-y-1.5 mb-4 max-h-32 overflow-y-auto">
-                {sortedStops.map((s, i) => (
-                  <div key={s.id} className="flex items-center gap-2 text-xs">
-                    <span className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-secondary-foreground flex-shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="text-foreground font-medium truncate">{s.name}</span>
-                    <Badge className={`${gradeColors[s.grade]} text-[9px] ml-auto border-0 flex-shrink-0`}>{s.grade}</Badge>
-                  </div>
-                ))}
-              </div>
-
-              <Button onClick={startWalk} className="w-full gap-2">
-                <Navigation className="w-4 h-4" />
-                Start Walking
-              </Button>
-            </motion.div>
+          {walkedPath.length > 1 && !isEditMode && (
+            <Polyline
+              positions={walkedPath}
+              pathOptions={{
+                color: "hsl(43 80% 55%)",
+                weight: 5,
+                opacity: 0.95,
+                lineCap: "round",
+              }}
+            />
           )}
 
-          {walkState === "active" && (
-            <motion.div
-              key="active"
-              initial={{ y: 200, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 200, opacity: 0 }}
-              className="absolute bottom-4 left-3 right-3 z-[1001] bg-card rounded-2xl border border-border shadow-2xl overflow-hidden"
-            >
-              {/* Direction bar */}
-              {distanceToStop !== null && (
-                <div className="bg-primary/10 px-4 py-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Navigation className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-bold text-primary">
-                      {distanceToStop <= ARRIVAL_RADIUS
-                        ? "You've arrived! 🎉"
-                        : `Head ${directionToStop} · ${formatDistance(distanceToStop)}`}
-                    </span>
-                  </div>
-                  {visitedIds.has(currentStop.id) && (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                  )}
+          {editableStops.map((stop) => (
+            <Marker
+              key={`stop-${stop.number}`}
+              position={[stop.lat, stop.lng]}
+              icon={stopMarkerIcon(
+                stop,
+                isEditMode ? "pending" : stopMarkerState(stop),
+                isEditMode
+              )}
+              draggable={isEditMode}
+              eventHandlers={
+                isEditMode
+                  ? {
+                      dragend: (event) => {
+                        const marker = event.target as L.Marker;
+                        const latlng = marker.getLatLng();
+                        setStopPosition(stop.number, [latlng.lat, latlng.lng]);
+                      },
+                    }
+                  : undefined
+              }
+            />
+          ))}
+
+          {isEditMode &&
+            routeSegments.flatMap((segment) =>
+              segment.waypoints.map((waypoint, waypointIndex) => (
+                <Marker
+                  key={`waypoint-${segment.key}-${waypointIndex}`}
+                  position={waypoint}
+                  icon={waypointMarkerIcon}
+                  draggable
+                  eventHandlers={{
+                    click: () => setSelectedSegmentKey(segment.key),
+                    dragend: (event) => {
+                      const marker = event.target as L.Marker;
+                      const latlng = marker.getLatLng();
+                      setWaypointPosition(segment.key, waypointIndex, [latlng.lat, latlng.lng]);
+                    },
+                    dblclick: () => removeWaypoint(segment.key, waypointIndex),
+                  }}
+                />
+              ))
+            )}
+
+          {isEditMode &&
+            selectedSegment &&
+            selectedSegment.points.slice(0, -1).map((point, index) => {
+              const nextPoint = selectedSegment.points[index + 1];
+              const midpoint: [number, number] = [
+                (point[0] + nextPoint[0]) / 2,
+                (point[1] + nextPoint[1]) / 2,
+              ];
+
+              return (
+                <Marker
+                  key={`midpoint-${selectedSegment.key}-${index}`}
+                  position={midpoint}
+                  icon={midpointMarkerIcon}
+                  eventHandlers={{
+                    click: () => insertWaypoint(selectedSegment.key, midpoint, selectedSegment.points),
+                  }}
+                />
+              );
+            })}
+
+          {showFigurine && <FigurineMarker position={figurinePos} isMoving={isMoving} />}
+        </MapContainer>
+      </div>
+
+      <div className="relative z-[1001] px-4 pt-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-full bg-heritage-cream/95 shadow-md hover:bg-heritage-cream transition-colors"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-5 h-5 text-heritage-deep" />
+          </button>
+
+          <div className="flex-1 bg-heritage-cream/95 backdrop-blur-sm rounded-full px-4 py-2 shadow-md">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-display text-heritage-deep text-base leading-tight truncate">
+                  Heritage Walk
+                </p>
+                <p className="text-heritage-deep/60 text-xs font-body">
+                  {isEditMode && "Edit mode · select a segment, drag points, click line or midpoint to shape it"}
+                  {!isEditMode && mode === "idle" && "8 stops · LVP Gate → Gazra Cafe"}
+                  {!isEditMode && mode === "preview" && `Preview · ${visitedCount}/8 stops`}
+                  {!isEditMode && mode === "live" && `Live · ${visitedCount}/8 stops`}
+                  {!isEditMode && mode === "complete" && "Walk complete"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1">
+                {!isEditMode && mode === "live" && (
+                  <span className="inline-flex items-center gap-1 text-xs font-body text-heritage-terracotta">
+                    <Locate className="w-3 h-3" />
+                    GPS
+                  </span>
+                )}
+                {!isEditMode && mode === "preview" && (
+                  <button
+                    onClick={resetWalk}
+                    className="p-1 rounded-full hover:bg-heritage-sand/60"
+                    aria-label="Exit preview"
+                  >
+                    <X className="w-4 h-4 text-heritage-deep" />
+                  </button>
+                )}
+                <button
+                  onClick={toggleEditMode}
+                  className={`p-2 rounded-full transition-colors ${
+                    isEditMode
+                      ? "bg-heritage-deep text-heritage-cream"
+                      : "hover:bg-heritage-sand/60 text-heritage-deep"
+                  }`}
+                  aria-label="Toggle edit mode"
+                >
+                  <Wrench className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isEditMode && (
+        <div className="fixed inset-x-4 bottom-4 z-[1001]">
+          <div className="max-w-2xl mx-auto bg-heritage-cream/97 backdrop-blur rounded-3xl shadow-2xl border border-heritage-deep/10 overflow-hidden">
+            <div className="bg-heritage-deep px-5 py-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-heritage-sand/80 text-xs uppercase tracking-wider font-body">
+                  Route editor
+                </p>
+                <p className="text-heritage-cream font-body text-sm">
+                  Drag numbered stops. Select a segment, click the line or midpoint to add a vertex, drag vertices onto roads, and double-click a waypoint to remove it.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={resetEditedRoute}
+                  className="border-heritage-sand/40 bg-transparent text-heritage-cream hover:bg-heritage-sand hover:text-heritage-deep"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset
+                </Button>
+                <Button
+                  onClick={copyExportJson}
+                  className="bg-heritage-gold text-heritage-deep hover:bg-heritage-gold/90"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy JSON
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-body text-heritage-deep/70">
+                <div className="rounded-2xl bg-heritage-sand/45 px-3 py-2">
+                  Stops: {editableStops.length} · Waypoints:{" "}
+                  {Object.values(editableWaypoints).reduce((sum, points) => sum + points.length, 0)}
+                </div>
+                <div className="rounded-2xl bg-heritage-sand/45 px-3 py-2">
+                  Current route length: {(geometry.totalMeters / 1000).toFixed(2)} km
+                </div>
+              </div>
+
+              {selectedSegment && (
+                <div className="rounded-2xl bg-heritage-sand/45 px-3 py-2 text-xs font-body text-heritage-deep/80">
+                  Editing segment {selectedSegment.key}: {selectedSegment.fromStop.name} to {selectedSegment.toStop.name}
                 </div>
               )}
 
-              {/* Stop info */}
-              <div className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                    {currentStopIdx + 1}
-                  </span>
-                  <h3 className="font-display font-bold text-foreground text-base leading-snug flex-1 truncate">
-                    {currentStop.name}
-                  </h3>
-                  <Badge className={`${gradeColors[currentStop.grade]} text-xs border-0`}>{currentStop.grade}</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground font-body mt-1 line-clamp-2">
-                  {currentStop.description}
-                </p>
+              <textarea
+                readOnly
+                value={exportJson}
+                className="w-full h-56 rounded-2xl border border-heritage-deep/15 bg-white/85 px-4 py-3 text-xs font-mono text-heritage-deep resize-none"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
-                {/* Features */}
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {currentStop.features.map((f) => (
-                    <span key={f} className="px-2 py-0.5 rounded-md bg-secondary text-secondary-foreground text-[10px] font-medium">
-                      {f}
-                    </span>
-                  ))}
+      {!isEditMode && (
+        <AnimatePresence mode="wait">
+          {mode === "idle" && (
+            <motion.div
+              key="idle"
+              className="fixed bottom-0 inset-x-0 z-[1001] px-4 pb-6"
+              initial={{ y: 200, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 200, opacity: 0 }}
+              transition={{ type: "spring", damping: 26, stiffness: 220 }}
+            >
+              <div className="max-w-md mx-auto bg-heritage-cream/98 backdrop-blur rounded-3xl shadow-2xl border border-heritage-deep/10 overflow-hidden">
+                <div className="bg-heritage-deep px-6 py-5">
+                  <p className="text-heritage-sand/80 text-xs uppercase tracking-wider font-body">
+                    Guided route
+                  </p>
+                  <h1 className="text-heritage-cream font-display text-2xl leading-tight mt-1">
+                    Palace to Pol — a statues walk
+                  </h1>
+                  <p className="text-heritage-sand/90 text-sm font-body mt-2">
+                    Eight landmarks from Laxmi Vilas Palace through the old-city markets, ending at Gazra Cafe in the
+                    Stree Udyogalaya.
+                  </p>
                 </div>
-
-                {/* Nav buttons */}
-                <div className="flex gap-2 mt-4">
+                <div className="p-4 space-y-3">
                   <Button
+                    onClick={startPreview}
+                    className="w-full bg-heritage-terracotta hover:bg-heritage-terracotta/90 text-heritage-cream font-body font-semibold py-6 rounded-xl text-base shadow-md flex items-center justify-center gap-2"
+                  >
+                    <Play className="w-4 h-4" fill="currentColor" />
+                    Preview walk
+                    <span className="text-heritage-cream/70 text-xs font-normal">· 30s</span>
+                  </Button>
+                  <Button
+                    onClick={startLiveWalk}
                     variant="outline"
-                    size="sm"
-                    onClick={goPrev}
-                    disabled={currentStopIdx === 0}
-                    className="flex-1 gap-1"
+                    className="w-full border-heritage-deep/30 text-heritage-deep hover:bg-heritage-deep hover:text-heritage-cream font-body font-semibold py-6 rounded-xl text-base flex items-center justify-center gap-2"
                   >
-                    <ChevronLeft className="w-4 h-4" />
-                    Prev
+                    <Locate className="w-4 h-4" />
+                    Start live walk
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={goNext}
-                    className="flex-1 gap-1"
-                  >
-                    {currentStopIdx === sortedStops.length - 1 ? "Finish" : "Next"}
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                {/* Progress dots */}
-                <div className="flex justify-center gap-1 mt-3">
-                  {sortedStops.map((s, i) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setCurrentStopIdx(i)}
-                      className="p-0.5"
-                    >
-                      {visitedIds.has(s.id) ? (
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      ) : i === currentStopIdx ? (
-                        <Circle className="w-3 h-3 text-primary fill-primary" />
-                      ) : (
-                        <Circle className="w-3 h-3 text-muted-foreground/40" />
-                      )}
-                    </button>
-                  ))}
+                  <p className="text-heritage-deep/50 text-[11px] text-center font-body">
+                    Preview plays an animated walkthrough. Edit mode lets you reshape each segment so the path can trace the roads manually.
+                  </p>
                 </div>
               </div>
             </motion.div>
           )}
 
-          {walkState === "complete" && (
+          {(mode === "preview" || mode === "live") && (
             <motion.div
-              key="complete"
+              key="walking"
+              className="fixed bottom-0 inset-x-0 z-[1001] px-4 pb-6"
               initial={{ y: 200, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 200, opacity: 0 }}
-              className="absolute bottom-4 left-3 right-3 z-[1001] bg-card rounded-2xl border border-border shadow-2xl p-5 text-center"
+              transition={{ type: "spring", damping: 26, stiffness: 220 }}
             >
-              <h2 className="font-display font-bold text-foreground text-xl mb-1">Walk Complete! 🎉</h2>
-              <p className="text-sm text-muted-foreground mb-1">
-                You visited {visitedIds.size} of {sortedStops.length} heritage buildings.
-              </p>
-              <div className="flex gap-2 mt-4">
-                <Button variant="outline" onClick={() => navigate("/")} className="flex-1">
-                  Home
-                </Button>
-                <Button onClick={startWalk} className="flex-1 gap-1">
-                  <Navigation className="w-4 h-4" />
-                  Walk Again
-                </Button>
+              <div className="max-w-md mx-auto bg-heritage-cream/98 backdrop-blur rounded-3xl shadow-2xl border border-heritage-deep/10 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-heritage-gold text-heritage-deep flex items-center justify-center font-display text-lg font-bold">
+                    {visitedCount === 0 ? 1 : Math.min(visitedCount + 1, editableStops.length)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-heritage-deep/60 text-[11px] uppercase tracking-wider font-body">
+                      {mode === "preview" ? "Next stop" : "Head toward"}
+                    </p>
+                    <p className="font-display text-heritage-deep text-base leading-tight truncate">
+                      {editableStops[Math.min(visitedCount, editableStops.length - 1)]?.name}
+                    </p>
+                    <div className="mt-2 h-1.5 bg-heritage-sand rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-heritage-terracotta transition-all duration-500"
+                        style={{ width: `${(visitedCount / editableStops.length) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={resetWalk}
+                    className="flex-shrink-0 p-2 rounded-full bg-heritage-sand/70 hover:bg-heritage-sand"
+                    aria-label="End walk"
+                  >
+                    <Pause className="w-4 h-4 text-heritage-deep" />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {mode === "complete" && (
+            <motion.div
+              key="complete"
+              className="fixed bottom-0 inset-x-0 z-[1001] px-4 pb-6"
+              initial={{ y: 200, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 200, opacity: 0 }}
+              transition={{ type: "spring", damping: 26, stiffness: 220 }}
+            >
+              <div className="max-w-md mx-auto bg-heritage-cream/98 backdrop-blur rounded-3xl shadow-2xl border border-heritage-deep/10 overflow-hidden">
+                <div className="bg-heritage-deep px-6 py-5">
+                  <p className="text-heritage-sand/80 text-xs uppercase tracking-wider font-body">
+                    Walk complete
+                  </p>
+                  <h2 className="text-heritage-cream font-display text-2xl leading-tight mt-1">
+                    You finished the heritage walk
+                  </h2>
+                  <p className="text-heritage-sand/90 text-sm font-body mt-2">
+                    All {editableStops.length} landmarks covered — palace gates, statues, the lake, and the old-city
+                    cafe.
+                  </p>
+                </div>
+                <div className="p-4 grid grid-cols-2 gap-3">
+                  <Button
+                    onClick={startPreview}
+                    variant="outline"
+                    className="border-heritage-deep/30 text-heritage-deep hover:bg-heritage-sand font-body py-5 rounded-xl flex items-center justify-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Replay
+                  </Button>
+                  <Button
+                    onClick={() => navigate("/")}
+                    className="bg-heritage-terracotta hover:bg-heritage-terracotta/90 text-heritage-cream font-body py-5 rounded-xl flex items-center justify-center gap-2"
+                  >
+                    <Home className="w-4 h-4" />
+                    Home
+                  </Button>
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      )}
+
+      {!isEditMode && (
+        <StopInfoDialog
+          stop={activeStop}
+          isFinal={activeStop?.number === editableStops.length}
+          onContinue={handleContinueFromStop}
+        />
+      )}
     </div>
   );
-};
-
-export default WalkNowPage;
+}
