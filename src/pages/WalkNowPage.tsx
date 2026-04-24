@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Copy, Home, Locate, Pause, Play, RotateCcw, Wrench, X } from "lucide-react";
+import { ArrowLeft, Copy, Home, Locate, Pause, Play, RotateCcw, Save, Wrench, X } from "lucide-react";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L, { type LeafletMouseEvent, type Polyline as LeafletPolyline } from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -26,6 +26,7 @@ type WaypointMap = Record<string, [number, number][]>;
 const PREVIEW_DURATION_MS = 30_000;
 const LIVE_ARRIVAL_RADIUS_M = 30;
 const ADMIN_SESSION_KEY = "admin_authed";
+const ROUTE_STORAGE_KEY = "walk_route_editor_state_v1";
 
 const stopMarkerIcon = (
   stop: WalkStop,
@@ -108,6 +109,10 @@ function cloneWaypoints(source: WaypointMap) {
   ) as WaypointMap;
 }
 
+function cloneStops(source: WalkStop[]) {
+  return source.map((stop) => ({ ...stop }));
+}
+
 function pointToSegmentDistance(
   point: [number, number],
   start: [number, number],
@@ -171,13 +176,15 @@ export default function WalkNowPage() {
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableStops, setEditableStops] = useState<WalkStop[]>(() =>
-    walkStops.map((stop) => ({ ...stop }))
+    cloneStops(walkStops)
   );
   const [editableWaypoints, setEditableWaypoints] = useState<WaypointMap>(() =>
     cloneWaypoints(segmentWaypoints)
   );
   const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const geometry = useMemo(
     () => getRouteGeometry(editableStops, editableWaypoints),
@@ -241,6 +248,34 @@ export default function WalkNowPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const saved = window.localStorage.getItem(ROUTE_STORAGE_KEY);
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved) as {
+        stops?: WalkStop[];
+        waypoints?: WaypointMap;
+        savedAt?: string;
+      };
+
+      if (parsed.stops?.length === walkStops.length) {
+        setEditableStops(cloneStops(parsed.stops));
+      }
+      if (parsed.waypoints) {
+        setEditableWaypoints(cloneWaypoints(parsed.waypoints));
+      }
+      if (parsed.savedAt) {
+        setLastSavedAt(parsed.savedAt);
+      }
+    } catch {
+      window.localStorage.removeItem(ROUTE_STORAGE_KEY);
+      toast.error("Saved route data was invalid and has been cleared.");
+    }
+  }, []);
+
+  useEffect(() => {
     if (!isEditMode) {
       setSelectedSegmentKey(null);
       return;
@@ -297,9 +332,27 @@ export default function WalkNowPage() {
   };
 
   const resetEditedRoute = () => {
-    setEditableStops(walkStops.map((stop) => ({ ...stop })));
+    setEditableStops(cloneStops(walkStops));
     setEditableWaypoints(cloneWaypoints(segmentWaypoints));
+    setHasUnsavedChanges(true);
     toast.success("Route reset to the saved defaults.");
+  };
+
+  const saveEditedRoute = () => {
+    if (typeof window === "undefined") return;
+
+    const savedAt = new Date().toISOString();
+    window.localStorage.setItem(
+      ROUTE_STORAGE_KEY,
+      JSON.stringify({
+        stops: editableStops,
+        waypoints: editableWaypoints,
+        savedAt,
+      })
+    );
+    setLastSavedAt(savedAt);
+    setHasUnsavedChanges(false);
+    toast.success("Route changes saved for this deployment.");
   };
 
   const startPreview = () => {
@@ -526,6 +579,18 @@ export default function WalkNowPage() {
 
   const visitedCount = visitedStopNumbers.size;
   const showFigurine = mode !== "idle" && !isEditMode;
+  const savedLabel = lastSavedAt
+    ? new Date(lastSavedAt).toLocaleString()
+    : "Not saved yet";
+
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [editableStops, editableWaypoints]);
+
+  useEffect(() => {
+    if (lastSavedAt === null) return;
+    setHasUnsavedChanges(false);
+  }, [lastSavedAt]);
 
   return (
     <div className="min-h-screen bg-heritage-cream relative">
@@ -735,6 +800,13 @@ export default function WalkNowPage() {
                   Reset
                 </Button>
                 <Button
+                  onClick={saveEditedRoute}
+                  className="bg-heritage-terracotta text-heritage-cream hover:bg-heritage-terracotta/90"
+                >
+                  <Save className="w-4 h-4" />
+                  Save
+                </Button>
+                <Button
                   onClick={copyExportJson}
                   className="bg-heritage-gold text-heritage-deep hover:bg-heritage-gold/90"
                 >
@@ -753,6 +825,10 @@ export default function WalkNowPage() {
                 <div className="rounded-2xl bg-heritage-sand/45 px-3 py-2">
                   Current route length: {(geometry.totalMeters / 1000).toFixed(2)} km
                 </div>
+              </div>
+
+              <div className="rounded-2xl bg-heritage-sand/45 px-3 py-2 text-xs font-body text-heritage-deep/80">
+                {hasUnsavedChanges ? "Unsaved changes" : "Saved"} · Last saved: {savedLabel}
               </div>
 
               {selectedSegment && (

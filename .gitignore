@@ -26,3 +26,5 @@ dist-ssr
 
 /CLAUDE.md
 .vercel
+.playwright-mcp/
+supabase/.temp/
