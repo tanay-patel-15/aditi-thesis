@@ -1,6 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Copy, Home, Locate, Pause, Play, RotateCcw, Save, Wrench, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Copy,
+  Home,
+  Locate,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  RotateCcw,
+  Save,
+  Wrench,
+  X,
+} from "lucide-react";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L, { type LeafletMouseEvent, type Polyline as LeafletPolyline } from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -19,14 +32,18 @@ import {
 import { getDistanceMeters } from "@/data/heritageHouses";
 import { FigurineMarker, FigurineStyles } from "@/components/walk/FigurineMarker";
 import { StopInfoDialog } from "@/components/walk/StopInfoDialog";
+import {
+  fetchSharedWalkRoute,
+  HERITAGE_WALK_ROUTE_KEY,
+  saveSharedWalkRoute,
+  type WaypointMap,
+} from "@/lib/walkRouteConfig";
 
 type Mode = "idle" | "preview" | "live" | "complete";
-type WaypointMap = Record<string, [number, number][]>;
 
 const PREVIEW_DURATION_MS = 30_000;
 const LIVE_ARRIVAL_RADIUS_M = 30;
 const ADMIN_SESSION_KEY = "admin_authed";
-const ROUTE_STORAGE_KEY = "walk_route_editor_state_v1";
 
 const stopMarkerIcon = (
   stop: WalkStop,
@@ -173,6 +190,7 @@ function FitRouteBounds({
 
 export default function WalkNowPage() {
   const navigate = useNavigate();
+  const adminPasswordRef = useRef<string>("");
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableStops, setEditableStops] = useState<WalkStop[]>(() =>
@@ -184,7 +202,10 @@ export default function WalkNowPage() {
   const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  const [isLoadingSharedRoute, setIsLoadingSharedRoute] = useState(true);
+  const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
+  const [isJsonVisible, setIsJsonVisible] = useState(false);
 
   const geometry = useMemo(
     () => getRouteGeometry(editableStops, editableWaypoints),
@@ -204,6 +225,15 @@ export default function WalkNowPage() {
   const [activeStop, setActiveStop] = useState<WalkStop | null>(null);
   const [visitedStopNumbers, setVisitedStopNumbers] = useState<Set<number>>(new Set());
   const [progressMeters, setProgressMeters] = useState(0);
+  const currentSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        routeKey: HERITAGE_WALK_ROUTE_KEY,
+        stops: editableStops,
+        segmentWaypoints: editableWaypoints,
+      }),
+    [editableStops, editableWaypoints]
+  );
 
   const previewPausedRef = useRef(true);
   const baselineMetersRef = useRef(0);
@@ -248,36 +278,66 @@ export default function WalkNowPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    let cancelled = false;
 
-    const saved = window.localStorage.getItem(ROUTE_STORAGE_KEY);
-    if (!saved) return;
+    const loadSharedRoute = async () => {
+      try {
+        const sharedRoute = await fetchSharedWalkRoute();
+        if (cancelled) return;
 
-    try {
-      const parsed = JSON.parse(saved) as {
-        stops?: WalkStop[];
-        waypoints?: WaypointMap;
-        savedAt?: string;
-      };
+        if (sharedRoute) {
+          const mergedStops = cloneStops(sharedRoute.stops).map((stop) => {
+            const local = walkStops.find((s) => s.number === stop.number);
+            return local?.image ? { ...stop, image: local.image } : stop;
+          });
+          setEditableStops(mergedStops);
+          setEditableWaypoints(cloneWaypoints(sharedRoute.segmentWaypoints));
+          setLastSavedAt(sharedRoute.updatedAt);
+          setSavedSnapshot(
+            JSON.stringify({
+              routeKey: sharedRoute.routeKey,
+              stops: sharedRoute.stops,
+              segmentWaypoints: sharedRoute.segmentWaypoints,
+            })
+          );
+        } else {
+          setSavedSnapshot(
+            JSON.stringify({
+              routeKey: HERITAGE_WALK_ROUTE_KEY,
+              stops: walkStops,
+              segmentWaypoints,
+            })
+          );
+        }
+        setFitSignal((value) => value + 1);
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "Failed to load saved route.";
+        toast.error(message);
+        setSavedSnapshot(
+          JSON.stringify({
+            routeKey: HERITAGE_WALK_ROUTE_KEY,
+            stops: walkStops,
+            segmentWaypoints,
+          })
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSharedRoute(false);
+        }
+      }
+    };
 
-      if (parsed.stops?.length === walkStops.length) {
-        setEditableStops(cloneStops(parsed.stops));
-      }
-      if (parsed.waypoints) {
-        setEditableWaypoints(cloneWaypoints(parsed.waypoints));
-      }
-      if (parsed.savedAt) {
-        setLastSavedAt(parsed.savedAt);
-      }
-    } catch {
-      window.localStorage.removeItem(ROUTE_STORAGE_KEY);
-      toast.error("Saved route data was invalid and has been cleared.");
-    }
+    loadSharedRoute();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!isEditMode) {
       setSelectedSegmentKey(null);
+      setIsEditorCollapsed(false);
       return;
     }
 
@@ -334,25 +394,46 @@ export default function WalkNowPage() {
   const resetEditedRoute = () => {
     setEditableStops(cloneStops(walkStops));
     setEditableWaypoints(cloneWaypoints(segmentWaypoints));
-    setHasUnsavedChanges(true);
     toast.success("Route reset to the saved defaults.");
   };
 
-  const saveEditedRoute = () => {
-    if (typeof window === "undefined") return;
+  const getAdminPasswordForSave = (): string | null => {
+    if (adminPasswordRef.current) return adminPasswordRef.current;
 
-    const savedAt = new Date().toISOString();
-    window.localStorage.setItem(
-      ROUTE_STORAGE_KEY,
-      JSON.stringify({
-        stops: editableStops,
-        waypoints: editableWaypoints,
-        savedAt,
-      })
-    );
-    setLastSavedAt(savedAt);
-    setHasUnsavedChanges(false);
-    toast.success("Route changes saved for this deployment.");
+    const expectedPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+    if (!expectedPassword) {
+      toast.error("Admin password not configured. Set VITE_ADMIN_PASSWORD in .env");
+      return null;
+    }
+
+    const enteredPassword = window.prompt("Enter admin password to save the shared route:");
+    if (enteredPassword == null) return null;
+    if (enteredPassword !== expectedPassword) {
+      toast.error("Incorrect admin password.");
+      return null;
+    }
+
+    adminPasswordRef.current = enteredPassword;
+    return enteredPassword;
+  };
+
+  const saveEditedRoute = async () => {
+    const adminPassword = getAdminPasswordForSave();
+    if (!adminPassword) return;
+
+    try {
+      const { updatedAt } = await saveSharedWalkRoute(
+        adminPassword,
+        editableStops,
+        editableWaypoints
+      );
+      setLastSavedAt(updatedAt);
+      setSavedSnapshot(currentSnapshot);
+      toast.success("Route changes saved for everyone.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save route.";
+      toast.error(message);
+    }
   };
 
   const startPreview = () => {
@@ -562,6 +643,7 @@ export default function WalkNowPage() {
           toast.error("Incorrect admin password.");
           return;
         }
+        adminPasswordRef.current = enteredPassword;
         window.sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
       }
     }
@@ -579,18 +661,10 @@ export default function WalkNowPage() {
 
   const visitedCount = visitedStopNumbers.size;
   const showFigurine = mode !== "idle" && !isEditMode;
+  const hasUnsavedChanges = savedSnapshot !== null && currentSnapshot !== savedSnapshot;
   const savedLabel = lastSavedAt
     ? new Date(lastSavedAt).toLocaleString()
     : "Not saved yet";
-
-  useEffect(() => {
-    setHasUnsavedChanges(true);
-  }, [editableStops, editableWaypoints]);
-
-  useEffect(() => {
-    if (lastSavedAt === null) return;
-    setHasUnsavedChanges(false);
-  }, [lastSavedAt]);
 
   return (
     <div className="min-h-screen bg-heritage-cream relative">
@@ -737,11 +811,12 @@ export default function WalkNowPage() {
                   Heritage Walk
                 </p>
                 <p className="text-heritage-deep/60 text-xs font-body">
+                  {isLoadingSharedRoute && "Loading shared route..."}
                   {isEditMode && "Edit mode · select a segment, drag points, click line or midpoint to shape it"}
-                  {!isEditMode && mode === "idle" && "8 stops · LVP Gate → Gazra Cafe"}
-                  {!isEditMode && mode === "preview" && `Preview · ${visitedCount}/8 stops`}
-                  {!isEditMode && mode === "live" && `Live · ${visitedCount}/8 stops`}
-                  {!isEditMode && mode === "complete" && "Walk complete"}
+                  {!isLoadingSharedRoute && !isEditMode && mode === "idle" && "8 stops · LVP Gate → Gazra Cafe"}
+                  {!isLoadingSharedRoute && !isEditMode && mode === "preview" && `Preview · ${visitedCount}/8 stops`}
+                  {!isLoadingSharedRoute && !isEditMode && mode === "live" && `Live · ${visitedCount}/8 stops`}
+                  {!isLoadingSharedRoute && !isEditMode && mode === "complete" && "Walk complete"}
                 </p>
               </div>
 
@@ -778,7 +853,24 @@ export default function WalkNowPage() {
         </div>
       </div>
 
-      {isEditMode && (
+      {isEditMode && isEditorCollapsed && (
+        <div className="fixed right-4 bottom-4 z-[1001]">
+          <button
+            onClick={() => setIsEditorCollapsed(false)}
+            className="rounded-full bg-heritage-deep text-heritage-cream shadow-2xl border border-heritage-sand/20 px-4 py-3 flex items-center gap-2"
+            aria-label="Expand route editor"
+          >
+            <Wrench className="w-4 h-4" />
+            <span className="text-sm font-body font-semibold">Route editor</span>
+            {hasUnsavedChanges && (
+              <span className="w-2 h-2 rounded-full bg-heritage-gold" aria-hidden="true" />
+            )}
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {isEditMode && !isEditorCollapsed && (
         <div className="fixed inset-x-4 bottom-4 z-[1001]">
           <div className="max-w-2xl mx-auto bg-heritage-cream/97 backdrop-blur rounded-3xl shadow-2xl border border-heritage-deep/10 overflow-hidden">
             <div className="bg-heritage-deep px-5 py-4 flex items-center justify-between gap-3">
@@ -793,6 +885,14 @@ export default function WalkNowPage() {
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
+                  onClick={() => setIsEditorCollapsed(true)}
+                  className="border-heritage-sand/40 bg-transparent text-heritage-cream hover:bg-heritage-sand hover:text-heritage-deep"
+                >
+                  <Minimize2 className="w-4 h-4" />
+                  Minimize
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={resetEditedRoute}
                   className="border-heritage-sand/40 bg-transparent text-heritage-cream hover:bg-heritage-sand hover:text-heritage-deep"
                 >
@@ -801,6 +901,7 @@ export default function WalkNowPage() {
                 </Button>
                 <Button
                   onClick={saveEditedRoute}
+                  disabled={isLoadingSharedRoute}
                   className="bg-heritage-terracotta text-heritage-cream hover:bg-heritage-terracotta/90"
                 >
                   <Save className="w-4 h-4" />
@@ -828,7 +929,12 @@ export default function WalkNowPage() {
               </div>
 
               <div className="rounded-2xl bg-heritage-sand/45 px-3 py-2 text-xs font-body text-heritage-deep/80">
-                {hasUnsavedChanges ? "Unsaved changes" : "Saved"} · Last saved: {savedLabel}
+                {isLoadingSharedRoute
+                  ? "Loading shared route..."
+                  : hasUnsavedChanges
+                    ? "Unsaved changes"
+                    : "Saved"}{" "}
+                · Last saved: {savedLabel}
               </div>
 
               {selectedSegment && (
@@ -837,11 +943,21 @@ export default function WalkNowPage() {
                 </div>
               )}
 
-              <textarea
-                readOnly
-                value={exportJson}
-                className="w-full h-56 rounded-2xl border border-heritage-deep/15 bg-white/85 px-4 py-3 text-xs font-mono text-heritage-deep resize-none"
-              />
+              <button
+                onClick={() => setIsJsonVisible((v) => !v)}
+                className="w-full flex items-center justify-between rounded-2xl bg-heritage-sand/45 px-3 py-2 text-xs font-body text-heritage-deep/80 hover:bg-heritage-sand/60 transition-colors"
+              >
+                <span>Route JSON</span>
+                <span className="text-heritage-deep/50">{isJsonVisible ? "Hide ▲" : "Show ▼"}</span>
+              </button>
+
+              {isJsonVisible && (
+                <textarea
+                  readOnly
+                  value={exportJson}
+                  className="w-full h-56 rounded-2xl border border-heritage-deep/15 bg-white/85 px-4 py-3 text-xs font-mono text-heritage-deep resize-none"
+                />
+              )}
             </div>
           </div>
         </div>

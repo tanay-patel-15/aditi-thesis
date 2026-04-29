@@ -181,6 +181,30 @@ export type Database = {
         }
         Relationships: []
       }
+      walk_routes: {
+        Row: {
+          route_key: string
+          segment_waypoints: Json
+          stops: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          route_key: string
+          segment_waypoints?: Json
+          stops: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          route_key?: string
+          segment_waypoints?: Json
+          stops?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

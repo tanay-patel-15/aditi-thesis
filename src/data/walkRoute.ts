@@ -1,4 +1,12 @@
 import { getDistanceMeters } from "@/data/heritageHouses";
+import stop1Image from "@/assets/walk-stops/stop-1-lvp-gate.png";
+import stop2Image from "@/assets/walk-stops/stop-2-kirti-stambh.png";
+import stop3Image from "@/assets/walk-stops/stop-3-khanderao-statue.png";
+import stop4Image from "@/assets/walk-stops/stop-4-bhagat-singh.png";
+import stop5Image from "@/assets/walk-stops/stop-5-sursagar.png";
+import stop6Image from "@/assets/walk-stops/stop-6-gandhi-statue.png";
+import stop7Image from "@/assets/walk-stops/stop-7-buddha-statue.png";
+import stop8Image from "@/assets/walk-stops/stop-8-gazra-cafe.png";
 
 export interface WalkStop {
   number: number;
@@ -7,6 +15,7 @@ export interface WalkStop {
   lat: number;
   lng: number;
   description?: string;
+  image?: string;
 }
 
 export const walkStops: WalkStop[] = [
@@ -18,6 +27,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.194471,
     description:
       "The grand gateway to Laxmi Vilas Palace — the Gaekwad royal residence and one of the largest private dwellings built. The walk begins here where palace architecture meets the old-city artery.",
+    image: stop1Image,
   },
   {
     number: 2,
@@ -27,6 +37,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.197524,
     description:
       "A memorial column on Palace Road commemorating Vadodara's princely legacy. Pause here to take in the colonial-era civic planning that frames the approach into the old city.",
+    image: stop2Image,
   },
   {
     number: 3,
@@ -36,6 +47,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.201237,
     description:
       "A statue of Maharaja Khanderao Gaekwad outside the Indo-Saracenic Khanderao Market — a late 19th-century civic landmark that still anchors the market precinct.",
+    image: stop3Image,
   },
   {
     number: 4,
@@ -45,6 +57,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.205420,
     description:
       "Standing in front of the Old Nyay Mandir in Mandvi, this statue of Shaheed Bhagat Singh marks the political heart of the old city, amid the dense Bajwada bazaar.",
+    image: stop4Image,
   },
   {
     number: 5,
@@ -54,6 +67,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.203916,
     description:
       "The towering Shiva statue rising from the middle of Sursagar Lake — a signature image of Vadodara and a natural resting point along the walk.",
+    image: stop5Image,
   },
   {
     number: 6,
@@ -63,6 +77,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.204715,
     description:
       "A bronze of Mahatma Gandhi in Jubilee Baugh, the public garden laid out during Sayajirao III's reign — a green breathing space inside the walled city.",
+    image: stop6Image,
   },
   {
     number: 7,
@@ -72,6 +87,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.205135,
     description:
       "A seated Buddha outside the Mahatma Gandhi Nagar Gruh town hall — the civic auditorium that hosts the city's political and cultural gatherings.",
+    image: stop7Image,
   },
   {
     number: 8,
@@ -81,6 +97,7 @@ export const walkStops: WalkStop[] = [
     lng: 73.203423,
     description:
       "The walk ends at Gazra Cafe, run out of the historic Chimnabai Stree Udyogalaya — a women's vocational institute founded by Maharani Chimnabai II. A fitting place to rest, reflect, and eat.",
+    image: stop8Image,
   },
 ];
 

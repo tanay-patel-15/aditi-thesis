@@ -48,26 +48,45 @@ export function StopInfoDialog({ stop, isFinal, onContinue }: StopInfoDialogProp
               </div>
             </div>
 
-            <div className="px-6 py-5 space-y-4">
-              <div className="flex items-start gap-2 text-heritage-deep/80">
-                <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-heritage-terracotta" />
-                <p className="text-sm font-body">{stop.subtitle}</p>
+            {stop.image ? (
+              <div className="flex flex-col">
+                <img
+                  src={stop.image}
+                  alt={`Stop ${stop.number}: ${stop.name}`}
+                  className="w-full object-contain"
+                />
+                <div className="px-6 py-4">
+                  <Button
+                    onClick={onContinue}
+                    className="w-full bg-heritage-terracotta hover:bg-heritage-terracotta/90 text-heritage-cream font-body font-semibold py-6 rounded-xl text-base shadow-md"
+                  >
+                    {isFinal ? "Finish walk" : "Continue"}
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
               </div>
+            ) : (
+              <div className="px-6 py-5 space-y-4">
+                <div className="flex items-start gap-2 text-heritage-deep/80">
+                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-heritage-terracotta" />
+                  <p className="text-sm font-body">{stop.subtitle}</p>
+                </div>
 
-              {stop.description && (
-                <p className="text-heritage-deep/90 font-body text-[15px] leading-relaxed">
-                  {stop.description}
-                </p>
-              )}
+                {stop.description && (
+                  <p className="text-heritage-deep/90 font-body text-[15px] leading-relaxed">
+                    {stop.description}
+                  </p>
+                )}
 
-              <Button
-                onClick={onContinue}
-                className="w-full bg-heritage-terracotta hover:bg-heritage-terracotta/90 text-heritage-cream font-body font-semibold py-6 rounded-xl text-base shadow-md"
-              >
-                {isFinal ? "Finish walk" : "Continue"}
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
+                <Button
+                  onClick={onContinue}
+                  className="w-full bg-heritage-terracotta hover:bg-heritage-terracotta/90 text-heritage-cream font-body font-semibold py-6 rounded-xl text-base shadow-md"
+                >
+                  {isFinal ? "Finish walk" : "Continue"}
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}
