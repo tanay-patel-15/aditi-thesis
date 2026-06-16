@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowRight,
   Copy,
   Home,
   Locate,
@@ -15,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
-import L, { type LeafletMouseEvent, type Polyline as LeafletPolyline } from "leaflet";
+import L, { type LeafletMouseEvent } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ import {
   walkStops,
   type WalkStop,
 } from "@/data/walkRoute";
+import { walkRoutes, type WalkRoute } from "@/data/walkRoutes";
 import { getDistanceMeters } from "@/data/heritageHouses";
 import { FigurineMarker, FigurineStyles } from "@/components/walk/FigurineMarker";
 import { StopInfoDialog } from "@/components/walk/StopInfoDialog";
@@ -192,6 +194,11 @@ export default function WalkNowPage() {
   const navigate = useNavigate();
   const adminPasswordRef = useRef<string>("");
 
+  // Walk selection state
+  const [pageView, setPageView] = useState<"selection" | "walk">("selection");
+  const [selectedWalk, setSelectedWalk] = useState<WalkRoute | null>(null);
+  const activeWalk = selectedWalk ?? walkRoutes[0];
+
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableStops, setEditableStops] = useState<WalkStop[]>(() =>
     cloneStops(walkStops)
@@ -203,7 +210,7 @@ export default function WalkNowPage() {
   const [fitSignal, setFitSignal] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
-  const [isLoadingSharedRoute, setIsLoadingSharedRoute] = useState(true);
+  const [isLoadingSharedRoute, setIsLoadingSharedRoute] = useState(false);
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const [isJsonVisible, setIsJsonVisible] = useState(false);
 
@@ -218,21 +225,22 @@ export default function WalkNowPage() {
 
   const [mode, setMode] = useState<Mode>("idle");
   const [figurinePos, setFigurinePos] = useState<[number, number]>([
-    editableStops[0].lat,
-    editableStops[0].lng,
+    walkStops[0].lat,
+    walkStops[0].lng,
   ]);
   const [isMoving, setIsMoving] = useState(false);
   const [activeStop, setActiveStop] = useState<WalkStop | null>(null);
   const [visitedStopNumbers, setVisitedStopNumbers] = useState<Set<number>>(new Set());
   const [progressMeters, setProgressMeters] = useState(0);
+
   const currentSnapshot = useMemo(
     () =>
       JSON.stringify({
-        routeKey: HERITAGE_WALK_ROUTE_KEY,
+        routeKey: selectedWalk?.id ?? HERITAGE_WALK_ROUTE_KEY,
         stops: editableStops,
         segmentWaypoints: editableWaypoints,
       }),
-    [editableStops, editableWaypoints]
+    [selectedWalk?.id, editableStops, editableWaypoints]
   );
 
   const previewPausedRef = useRef(true);
@@ -266,28 +274,30 @@ export default function WalkNowPage() {
     stopPreviewLoop();
     stopLiveWatch();
     setMode("idle");
-    setFigurinePos([editableStops[0].lat, editableStops[0].lng]);
+    if (editableStops[0]) {
+      setFigurinePos([editableStops[0].lat, editableStops[0].lng]);
+    }
     setActiveStop(null);
     setVisitedStopNumbers(new Set());
     setProgressMeters(0);
     baselineMetersRef.current = 0;
   };
 
+  // Load shared route from Supabase when a walk is selected
   useEffect(() => {
-    setFitSignal((value) => value + 1);
-  }, []);
+    if (!selectedWalk) return;
 
-  useEffect(() => {
     let cancelled = false;
+    setIsLoadingSharedRoute(true);
 
     const loadSharedRoute = async () => {
       try {
-        const sharedRoute = await fetchSharedWalkRoute();
+        const sharedRoute = await fetchSharedWalkRoute(selectedWalk.id);
         if (cancelled) return;
 
         if (sharedRoute) {
           const mergedStops = cloneStops(sharedRoute.stops).map((stop) => {
-            const local = walkStops.find((s) => s.number === stop.number);
+            const local = selectedWalk.stops.find((s) => s.number === stop.number);
             return local?.image ? { ...stop, image: local.image } : stop;
           });
           setEditableStops(mergedStops);
@@ -303,22 +313,20 @@ export default function WalkNowPage() {
         } else {
           setSavedSnapshot(
             JSON.stringify({
-              routeKey: HERITAGE_WALK_ROUTE_KEY,
-              stops: walkStops,
-              segmentWaypoints,
+              routeKey: selectedWalk.id,
+              stops: selectedWalk.stops,
+              segmentWaypoints: selectedWalk.segmentWaypoints,
             })
           );
         }
-        setFitSignal((value) => value + 1);
-      } catch (error) {
+        setFitSignal((v) => v + 1);
+      } catch {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Failed to load saved route.";
-        toast.error(message);
         setSavedSnapshot(
           JSON.stringify({
-            routeKey: HERITAGE_WALK_ROUTE_KEY,
-            stops: walkStops,
-            segmentWaypoints,
+            routeKey: selectedWalk.id,
+            stops: selectedWalk.stops,
+            segmentWaypoints: selectedWalk.segmentWaypoints,
           })
         );
       } finally {
@@ -332,7 +340,7 @@ export default function WalkNowPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedWalk]);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -354,6 +362,36 @@ export default function WalkNowPage() {
       stopLiveWatch();
     };
   }, []);
+
+  const handleSelectWalk = (walk: WalkRoute) => {
+    if (walk.stops.length === 0) return;
+
+    const stops = cloneStops(walk.stops);
+    const waypoints = cloneWaypoints(walk.segmentWaypoints);
+
+    setSelectedWalk(walk);
+    setEditableStops(stops);
+    setEditableWaypoints(waypoints);
+    setFigurinePos([stops[0].lat, stops[0].lng]);
+    setMode("idle");
+    setActiveStop(null);
+    setVisitedStopNumbers(new Set());
+    setProgressMeters(0);
+    baselineMetersRef.current = 0;
+    setLastSavedAt(null);
+    setSavedSnapshot(null);
+    setIsEditMode(false);
+    setIsEditorCollapsed(false);
+    setPageView("walk");
+    setFitSignal((v) => v + 1);
+  };
+
+  const handleBackFromWalk = () => {
+    stopPreviewLoop();
+    stopLiveWatch();
+    setMode("idle");
+    setPageView("selection");
+  };
 
   const setStopPosition = (stopNumber: number, latlng: [number, number]) => {
     setEditableStops((current) =>
@@ -392,8 +430,8 @@ export default function WalkNowPage() {
   };
 
   const resetEditedRoute = () => {
-    setEditableStops(cloneStops(walkStops));
-    setEditableWaypoints(cloneWaypoints(segmentWaypoints));
+    setEditableStops(cloneStops(activeWalk.stops));
+    setEditableWaypoints(cloneWaypoints(activeWalk.segmentWaypoints));
     toast.success("Route reset to the saved defaults.");
   };
 
@@ -425,7 +463,8 @@ export default function WalkNowPage() {
       const { updatedAt } = await saveSharedWalkRoute(
         adminPassword,
         editableStops,
-        editableWaypoints
+        editableWaypoints,
+        selectedWalk?.id ?? HERITAGE_WALK_ROUTE_KEY
       );
       setLastSavedAt(updatedAt);
       setSavedSnapshot(currentSnapshot);
@@ -438,11 +477,13 @@ export default function WalkNowPage() {
 
   const startPreview = () => {
     setMode("preview");
-    setFigurinePos([editableStops[0].lat, editableStops[0].lng]);
+    if (editableStops[0]) {
+      setFigurinePos([editableStops[0].lat, editableStops[0].lng]);
+    }
     setVisitedStopNumbers(new Set());
     setProgressMeters(0);
     baselineMetersRef.current = 0;
-    setActiveStop(editableStops[0]);
+    setActiveStop(editableStops[0] ?? null);
     setIsMoving(false);
   };
 
@@ -665,14 +706,70 @@ export default function WalkNowPage() {
   const savedLabel = lastSavedAt
     ? new Date(lastSavedAt).toLocaleString()
     : "Not saved yet";
+  const stopCount = editableStops.length;
 
+  // ── Selection screen ─────────────────────────────────────────────────────
+  if (pageView === "selection") {
+    return (
+      <div className="min-h-screen bg-heritage-cream">
+        <div className="px-4 pt-12 pb-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-full bg-heritage-sand/50 hover:bg-heritage-sand transition-colors"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-5 h-5 text-heritage-deep" />
+          </button>
+          <h1 className="font-display text-heritage-deep text-4xl font-bold mt-6">Walks</h1>
+          <p className="text-heritage-deep/60 font-body text-sm mt-1">
+            Heritage routes through old city Vadodara
+          </p>
+        </div>
+
+        <div className="px-4 pb-10 space-y-4">
+          {walkRoutes.map((walk) => (
+            <button
+              key={walk.id}
+              onClick={() => handleSelectWalk(walk)}
+              disabled={walk.stops.length === 0}
+              className={`w-full text-left rounded-3xl overflow-hidden shadow-lg border border-heritage-deep/10 transition-transform active:scale-[0.98] ${
+                walk.stops.length === 0 ? "opacity-60 cursor-not-allowed" : ""
+              }`}
+            >
+              <div style={{ backgroundColor: walk.accentColor }} className="px-5 py-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-white/75 text-[11px] font-body uppercase tracking-widest">
+                      {walk.stops.length > 0 ? `${walk.stops.length} stops` : "Coming soon"}
+                    </p>
+                    <h2 className="text-white font-display text-xl mt-0.5">{walk.name}</h2>
+                    <p className="text-white/80 text-sm font-body mt-0.5">{walk.subtitle}</p>
+                  </div>
+                  {walk.stops.length > 0 && (
+                    <ArrowRight className="w-5 h-5 text-white/70 mt-1 flex-shrink-0" />
+                  )}
+                </div>
+              </div>
+              <div className="bg-heritage-cream px-5 py-4">
+                <p className="text-heritage-deep/65 text-sm font-body leading-relaxed line-clamp-3">
+                  {walk.description}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Walk experience ───────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-heritage-cream relative">
       <FigurineStyles />
 
       <div className="fixed inset-0 z-0">
         <MapContainer
-          center={[editableStops[0].lat, editableStops[0].lng]}
+          center={editableStops[0] ? [editableStops[0].lat, editableStops[0].lng] : [22.293943, 73.194471]}
           zoom={15}
           className="h-full w-full"
           zoomControl={false}
@@ -797,9 +894,9 @@ export default function WalkNowPage() {
       <div className="relative z-[1001] px-4 pt-4">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={handleBackFromWalk}
             className="p-2 rounded-full bg-heritage-cream/95 shadow-md hover:bg-heritage-cream transition-colors"
-            aria-label="Back"
+            aria-label="Back to walks"
           >
             <ArrowLeft className="w-5 h-5 text-heritage-deep" />
           </button>
@@ -808,14 +905,14 @@ export default function WalkNowPage() {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="font-display text-heritage-deep text-base leading-tight truncate">
-                  Heritage Walk
+                  {activeWalk.name}
                 </p>
                 <p className="text-heritage-deep/60 text-xs font-body">
                   {isLoadingSharedRoute && "Loading shared route..."}
                   {isEditMode && "Edit mode · select a segment, drag points, click line or midpoint to shape it"}
-                  {!isLoadingSharedRoute && !isEditMode && mode === "idle" && "8 stops · LVP Gate → Gazra Cafe"}
-                  {!isLoadingSharedRoute && !isEditMode && mode === "preview" && `Preview · ${visitedCount}/8 stops`}
-                  {!isLoadingSharedRoute && !isEditMode && mode === "live" && `Live · ${visitedCount}/8 stops`}
+                  {!isLoadingSharedRoute && !isEditMode && mode === "idle" && `${stopCount} stops · ${editableStops[0]?.name} → ${editableStops[stopCount - 1]?.name}`}
+                  {!isLoadingSharedRoute && !isEditMode && mode === "preview" && `Preview · ${visitedCount}/${stopCount} stops`}
+                  {!isLoadingSharedRoute && !isEditMode && mode === "live" && `Live · ${visitedCount}/${stopCount} stops`}
                   {!isLoadingSharedRoute && !isEditMode && mode === "complete" && "Walk complete"}
                 </p>
               </div>
@@ -980,11 +1077,10 @@ export default function WalkNowPage() {
                     Guided route
                   </p>
                   <h1 className="text-heritage-cream font-display text-2xl leading-tight mt-1">
-                    Palace to Pol — a statues walk
+                    {activeWalk.name}
                   </h1>
                   <p className="text-heritage-sand/90 text-sm font-body mt-2">
-                    Eight landmarks from Laxmi Vilas Palace through the old-city markets, ending at Gazra Cafe in the
-                    Stree Udyogalaya.
+                    {activeWalk.description}
                   </p>
                 </div>
                 <div className="p-4 space-y-3">
@@ -1067,11 +1163,10 @@ export default function WalkNowPage() {
                     Walk complete
                   </p>
                   <h2 className="text-heritage-cream font-display text-2xl leading-tight mt-1">
-                    You finished the heritage walk
+                    You finished the {activeWalk.name}
                   </h2>
                   <p className="text-heritage-sand/90 text-sm font-body mt-2">
-                    All {editableStops.length} landmarks covered — palace gates, statues, the lake, and the old-city
-                    cafe.
+                    All {stopCount} stops completed.
                   </p>
                 </div>
                 <div className="p-4 grid grid-cols-2 gap-3">
