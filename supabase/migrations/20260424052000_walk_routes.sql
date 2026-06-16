@@ -16,7 +16,7 @@ USING (true);
 
 INSERT INTO public.walk_routes (route_key, stops, segment_waypoints)
 VALUES (
-  'moortiswar',
+  'murtiswar',
   $$[
     {
       "number": 1,

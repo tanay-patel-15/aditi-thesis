@@ -10,7 +10,7 @@ export interface SharedWalkRoute {
   updatedAt: string;
 }
 
-export const HERITAGE_WALK_ROUTE_KEY = "moortiswar";
+export const HERITAGE_WALK_ROUTE_KEY = "murtiswar";
 
 const isLatLngTuple = (value: unknown): value is [number, number] =>
   Array.isArray(value) &&

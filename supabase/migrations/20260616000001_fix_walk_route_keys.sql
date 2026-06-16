@@ -1,7 +1,7 @@
--- Rename existing heritage_walk seed row to moortiswar for existing DBs.
--- Fresh installs already get 'moortiswar' from the original migration seed.
+-- Rename existing heritage_walk seed row to murtiswar for existing DBs.
+-- Fresh installs already get 'murtiswar' from the original migration seed.
 UPDATE public.walk_routes
-SET route_key = 'moortiswar'
+SET route_key = 'murtiswar'
 WHERE route_key = 'heritage_walk';
 
 -- Insert the Ghadiyali Pol Walk (15 stops). Empty waypoints to start —

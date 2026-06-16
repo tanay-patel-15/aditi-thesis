@@ -1,5 +1,5 @@
 import type { WalkStop } from "@/data/walkRoute";
-import { walkStops, segmentWaypoints as moortiswarWaypoints } from "@/data/walkRoute";
+import { walkStops, segmentWaypoints as murtiswarWaypoints } from "@/data/walkRoute";
 
 export type { WalkStop };
 export {
@@ -21,14 +21,14 @@ export interface WalkRoute {
 
 export const walkRoutes: WalkRoute[] = [
   {
-    id: "moortiswar",
+    id: "murtiswar",
     name: "Murtiswar Walk",
     subtitle: "Palace to Pol",
     description:
       "Eight landmarks from Laxmi Vilas Palace through the old-city markets, ending at Gazra Cafe in the Stree Udyogalaya.",
     accentColor: "hsl(18 60% 48%)",
     stops: walkStops,
-    segmentWaypoints: moortiswarWaypoints,
+    segmentWaypoints: murtiswarWaypoints,
   },
   {
     id: "ghadiyali",
