@@ -21,7 +21,7 @@ const products: Product[] = [
   { id: "calendar", name: "The Pol Experience Calendar", description: "2026 desk calendar with illustrated heritage pol facades", price: 350, image: calendar },
   { id: "tshirt", name: "Pol T-Shirts", description: "Gujarati phrase cotton tees — \"Kem Cho?\", \"I ♥ Vadodara\" & more", price: 500, image: tshirts },
   { id: "keychain", name: "Pol Keychains", description: "Acrylic & brass keychains with pol streetscape motifs", price: 150, image: keychains },
-  { id: "journal", name: "The Pol Experience Journal", description: "Spiral sketch journal with Vadodara heritage building illustrations", price: 250, image: journal },
+  { id: "journal", name: "The Pol Experience Notebook", description: "Spiral sketch notebook with Vadodara heritage building illustrations", price: 250, image: journal },
 ];
 
 const container = {
