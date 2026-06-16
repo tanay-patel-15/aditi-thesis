@@ -4,12 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, MessageCircle, Plus, Minus, ShoppingBag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-import toteBag from "@/assets/shop/tote-bag.png";
-import postcardSet from "@/assets/shop/postcard-set.png";
-import tshirt from "@/assets/shop/tshirt.png";
-import fridgeMagnets from "@/assets/shop/fridge-magnets.png";
-import notebook from "@/assets/shop/notebook.png";
-import keychain from "@/assets/shop/keychain.png";
+import calendar from "@/assets/shop/calendar.png";
+import tshirts from "@/assets/shop/tshirts.png";
+import keychains from "@/assets/shop/keychains.png";
+import journal from "@/assets/shop/journal.png";
 
 interface Product {
   id: string;
@@ -20,12 +18,10 @@ interface Product {
 }
 
 const products: Product[] = [
-  { id: "tote", name: "Heritage Tote Bag", description: "Hand-printed cotton tote with pol house illustrations", price: 350, image: toteBag },
-  { id: "postcard-set", name: "Pol Postcard Set", description: "Set of 8 heritage building postcards with descriptions", price: 200, image: postcardSet },
-  { id: "tshirt", name: "Pol Walk T-Shirt", description: "Cotton t-shirt with Ghadiyali Pol motif print", price: 500, image: tshirt },
-  { id: "fridge-magnet", name: "Heritage Fridge Magnets", description: "Set of 4 wooden magnets — Jama Masjid, Tambekar Wada & more", price: 250, image: fridgeMagnets },
-  { id: "notebook", name: "Heritage Sketch Notebook", description: "A5 notebook with heritage illustrations on each page", price: 180, image: notebook },
-  { id: "keychain", name: "Brass Pol Keychain", description: "Handcrafted brass keychain in jharokha (balcony) shape", price: 150, image: keychain },
+  { id: "calendar", name: "The Pol Experience Calendar", description: "2026 desk calendar with illustrated heritage pol facades", price: 350, image: calendar },
+  { id: "tshirt", name: "Pol T-Shirts", description: "Gujarati phrase cotton tees — \"Kem Cho?\", \"I ♥ Vadodara\" & more", price: 500, image: tshirts },
+  { id: "keychain", name: "Pol Keychains", description: "Acrylic & brass keychains with pol streetscape motifs", price: 150, image: keychains },
+  { id: "journal", name: "The Pol Experience Journal", description: "Spiral sketch journal with Vadodara heritage building illustrations", price: 250, image: journal },
 ];
 
 const container = {

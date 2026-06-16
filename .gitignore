@@ -28,3 +28,6 @@ dist-ssr
 .vercel
 .playwright-mcp/
 supabase/.temp/
+
+# Local reference materials — never commit
+extras/
