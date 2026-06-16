@@ -22,7 +22,7 @@ export interface WalkRoute {
 export const walkRoutes: WalkRoute[] = [
   {
     id: "moortiswar",
-    name: "Moortiswar Walk",
+    name: "Murtiswar Walk",
     subtitle: "Palace to Pol",
     description:
       "Eight landmarks from Laxmi Vilas Palace through the old-city markets, ending at Gazra Cafe in the Stree Udyogalaya.",
