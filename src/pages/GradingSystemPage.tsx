@@ -203,6 +203,272 @@ const GradingSystemPage = () => {
         </p>
       </div>
 
+      {/* ── Block 1: Documentation and Identification ── */}
+      <div className="px-4 pt-6 pb-2 max-w-2xl mx-auto space-y-4">
+        <h2 className="font-display font-bold text-base text-foreground uppercase tracking-wide">
+          Documentation and Identification of the Existing Structures
+        </h2>
+        <p className="text-sm font-body font-semibold text-foreground leading-relaxed">
+          Documentation enables design to begin with understanding, allowing existing structures to be reused, repurposed, and meaningfully transformed rather than replaced.
+        </p>
+        <p className="text-sm font-body text-muted-foreground leading-relaxed">
+          The pols of Vadodara have evolved over time, where many traditional houses have been modified, partially occupied, or simply abandoned, while new constructions continue to gradually replace this living heritage. In many cases, interventions happen without fully understanding the existing structure, leading to a loss of character and continuity. Additionally, the absence of clear identification or recognition of individual houses within the pol fabric often results in their value being overlooked. This documentation and assessment framework is developed to recognise and acknowledge these existing structures through their architectural, spatial, cultural, and symbolic significance, encouraging adaptive reuse, reprogramming, and repurposing rather than replacement.
+        </p>
+
+        <h3 className="font-display font-semibold text-sm text-foreground">
+          Why is documentation necessary?
+        </h3>
+        <p className="text-sm font-body text-muted-foreground leading-relaxed">
+          Documentation is necessary to understand what already exists before any intervention is made. Documentation, along with categorisation, can together become a combined toolkit that allows each structure to be carefully understood and identified at present as well as for future studies. Through this process, it becomes possible to recognise architectural and spatial qualities, understand the degree of transformation over time, and acknowledge each building as part of the larger pol fabric. The identified houses and spaces are documented to create a larger interconnected understanding of the pol network and its architectural relationships, helping future studies, cultural mapping, and heritage-based interventions. This also enables proper identification and recognition of individual houses, giving them a clearer presence within the pol precinct. It helps in documenting and acknowledging buildings within the pol through their architectural character, symbolic value, and contribution to the larger interconnected urban fabric, which can contribute to better recognition, way finding, and cultural mapping of the area.
+        </p>
+        <p className="text-sm font-body text-muted-foreground leading-relaxed">
+          Rather than starting from scratch, design begins with understanding and valuing what already exists. By forming a structured documentation and assessment framework, each building can be understood as a layered system of structure, space, and detail. This helps in evaluating its potential and guiding the type of intervention and functions it can accommodate. As a result, the changes become understood and intentional, responding to existing conditions without losing character.
+        </p>
+        <p className="text-sm font-body text-muted-foreground leading-relaxed">
+          Acknowledging existing structures allows design to build upon their spatial intelligence, material presence, and adaptability. It ensures that interventions are not random, but rather rooted in an understanding of the space. This approach preserves the identity and continuity of the pol, supports new functions within existing frameworks, and promotes a more economical and sustainable way of development. At the same time, it reinforces the identity of individual houses by documenting them as part of a larger interconnected architectural and cultural network.
+        </p>
+      </div>
+
+      {/* ── Block 2: Documentation Framework for Pol Structures ── */}
+      <div className="px-4 pt-4 pb-2 max-w-2xl mx-auto space-y-4">
+        <h2 className="font-display font-bold text-base text-foreground uppercase tracking-wide">
+          Documentation Framework for Pol Structures
+        </h2>
+        <p className="text-sm font-body text-muted-foreground leading-relaxed">
+          The documentation framework is developed to identify and understand architectural, spatial, cultural, and symbolic relationships within the pol fabric. The study aims to form a larger interconnected network of structures that can support future heritage studies, cultural mapping, adaptive reuse strategies, and heritage walk interventions.
+        </p>
+        <p className="text-sm font-body text-muted-foreground leading-relaxed">
+          The documentation considers the presence of original structural systems, architectural features such as columns, brackets, façade details, intricate wooden carvings, decorative moulding designs, and the retention of traditional spatial characteristics. The framework reflects the extent to which these features are retained and the contribution of the structure to the larger interconnected pol fabric.
+        </p>
+
+        {/* Structure Classification */}
+        <h3 className="font-display font-semibold text-sm text-foreground uppercase tracking-wide pt-1">
+          Structure Classification
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            {
+              type: "A",
+              color: "bg-heritage-terracotta/10 border-heritage-terracotta/30",
+              badge: "bg-heritage-terracotta text-white",
+              desc: "Structures of exceptional architectural, historical, and cultural significance, often monumental in nature. These structures represent important heritage landmarks within the region and hold strong architectural and historical presence.",
+            },
+            {
+              type: "B",
+              color: "bg-heritage-gold/10 border-heritage-gold/30",
+              badge: "bg-heritage-gold text-heritage-deep",
+              desc: "Buildings with high architectural significance, retaining important traditional features and craftsmanship. Original timber structural systems or architectural elements such as columns, brackets, doors, windows with intricate wooden carvings, or decorative façade moulding designs remain clearly identifiable. Traditional spatial hierarchies of the pol house, such as otla, parsal, chowk, and khadki, remain largely intact along with the original massing and proportions.",
+            },
+            {
+              type: "C",
+              color: "bg-heritage-olive/10 border-heritage-olive/30",
+              badge: "bg-heritage-olive text-white",
+              desc: "Buildings that have undergone modifications over time but continue to retain identifiable spatial, typological, and architectural characteristics. Original timber structural frameworks of beams and columns remain visible. Traditional elements such as doors, windows, decorative grills, carved details, or moulded features may still be observed, maintaining the architectural character. The original form, proportions, and spatial organisation remain partially identifiable despite transformations.",
+            },
+            {
+              type: "D",
+              color: "bg-muted/60 border-border",
+              badge: "bg-muted text-muted-foreground",
+              desc: "Buildings of recent origin or structures that have undergone major transformations or maybe newly constructed. While traditional architectural features may not be strongly retained, these structures continue to respond to the scale, proportions, streetscape, and typological character of the pol, contributing towards contextual continuity within the urban fabric.",
+            },
+          ].map(({ type, color, badge, desc }) => (
+            <div key={type} className={`rounded-xl border p-3.5 space-y-2 ${color}`}>
+              <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold font-display ${badge}`}>
+                {type}
+              </span>
+              <p className="text-xs font-body text-foreground leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Condition Classification */}
+        <h3 className="font-display font-semibold text-sm text-foreground uppercase tracking-wide pt-2">
+          Condition Classification
+        </h3>
+        <div className="space-y-3">
+          {[
+            {
+              label: "Good",
+              chip: "text-green-700 bg-green-50 border-green-200",
+              points: ["Well maintained", "Structurally stable", "Minimal or no visible damage"],
+            },
+            {
+              label: "Fair",
+              chip: "text-amber-700 bg-amber-50 border-amber-200",
+              points: ["Moderate damage observed", "Requires repair and maintenance", "Visible signs of structural aging"],
+            },
+            {
+              label: "Poor",
+              chip: "text-red-700 bg-red-50 border-red-200",
+              points: ["Visible damage observed", "Requires urgent care and repair", "At risk of deterioration if left unmaintained"],
+            },
+          ].map(({ label, chip, points }) => (
+            <div key={label} className="flex gap-3 items-start">
+              <span className={`mt-0.5 flex-shrink-0 px-2.5 py-0.5 rounded-full border text-xs font-semibold font-body ${chip}`}>
+                {label}
+              </span>
+              <ul className="space-y-0.5">
+                {points.map((p) => (
+                  <li key={p} className="text-xs font-body text-muted-foreground flex gap-1.5">
+                    <span className="text-heritage-terracotta mt-0.5">–</span>
+                    <span>{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Block 3: Type A/B/C/D Framework Table ── */}
+      <div className="px-4 pt-4 pb-2 max-w-2xl mx-auto space-y-3">
+        <h2 className="font-display font-bold text-base text-foreground uppercase tracking-wide">
+          Documentation Framework for Pols of Old City, Vadodara
+        </h2>
+        <p className="text-xs text-muted-foreground font-body leading-relaxed italic">
+          Documentation framework developed by the author for identifying and documenting existing structures within the pol, adapted to suit the scope of this study.{" "}
+          <span className="not-italic font-semibold text-foreground">Source: Author</span>
+        </p>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[640px] text-xs font-body border-collapse">
+            <thead>
+              <tr>
+                {[
+                  { type: "Type A", bg: "bg-heritage-terracotta text-white" },
+                  { type: "Type B", bg: "bg-heritage-gold text-heritage-deep" },
+                  { type: "Type C", bg: "bg-heritage-olive text-white" },
+                  { type: "Type D", bg: "bg-muted text-muted-foreground" },
+                ].map(({ type, bg }) => (
+                  <th key={type} className={`px-3 py-3 text-left font-display font-bold border-l first:border-l-0 border-white/20 ${bg}`}>
+                    {type}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* Row 1: Definition */}
+              <tr className="bg-muted/40">
+                <td colSpan={4} className="px-3 py-2 font-display font-semibold text-foreground border-t border-border text-[11px] uppercase tracking-wide">
+                  1. Definition
+                </td>
+              </tr>
+              <tr className="bg-card">
+                <td className="px-3 py-2.5 align-top border-t border-border text-muted-foreground leading-snug">
+                  Structures of exceptional historical cultural importance, often monumental in nature. Those which have been and are prime landmarks of the region.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Buildings with high architectural value, retaining significant traditional features and craftsmanship.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Buildings been modified over time, retaining basic spatial, typological, and architectural characteristics.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Buildings of recent origin or those which have undergone transformation, that are newly constructed but maybe responding to the scale, proportion, and typological character of the pol.
+                </td>
+              </tr>
+
+              {/* Row 2: Objective */}
+              <tr className="bg-muted/40">
+                <td colSpan={4} className="px-3 py-2 font-display font-semibold text-foreground border-t border-border text-[11px] uppercase tracking-wide">
+                  2. Objective
+                </td>
+              </tr>
+              <tr className="bg-card">
+                <td className="px-3 py-2.5 align-top border-t border-border text-muted-foreground leading-snug">
+                  Identify and acknowledge the architectural identity of the living heritage.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Recognition of architectural features and craftsmanship.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Maintain and enhance architectural and spatial character of the pol with a scope for adaptive reuse.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Acknowledge transformed or new structures within the evolving precinct.
+                </td>
+              </tr>
+
+              {/* Row 3: Identifying Elements */}
+              <tr className="bg-muted/40">
+                <td colSpan={4} className="px-3 py-2 font-display font-semibold text-foreground border-t border-border text-[11px] uppercase tracking-wide">
+                  3. Identifying Elements
+                </td>
+              </tr>
+              <tr className="bg-card">
+                <td className="px-3 py-2.5 align-top border-t border-border text-muted-foreground leading-snug">
+                  <ul className="space-y-1">
+                    {["Comprises of structures of cultural or historical importance, embodying strong architectural character and significance, forming prime landmarks of the region."].map((el, i) => (
+                      <li key={i} className="flex gap-1.5"><span className="text-heritage-terracotta font-bold mt-0.5 flex-shrink-0">A.</span><span>{el}</span></li>
+                    ))}
+                  </ul>
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  <ul className="space-y-1">
+                    {[
+                      "Original timber structural system intact and visible.",
+                      "Intricate carving details visible on columns, brackets, doors or windows.",
+                      "Intricately articulated façade with decorative mouldings or carving details.",
+                      "Presence of original spatial hierarchy characteristics of a traditional pol house, including otla, parsal, courtyard, khadki, etc.",
+                      "Original massing, proportions and typological characteristics clearly identifiable.",
+                      "Traditional pol khadkis with intricate architectural elements and details.",
+                    ].map((el, i) => (
+                      <li key={i} className="flex gap-1.5"><span className="text-heritage-gold font-bold mt-0.5 flex-shrink-0">{String.fromCharCode(65 + i)}.</span><span>{el}</span></li>
+                    ))}
+                  </ul>
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  <ul className="space-y-1">
+                    {[
+                      "Original timber structural system intact and visible, with necessary modifications.",
+                      "Few architectural elements, mouldings or carvings may be visible.",
+                      "Façade with traces of traditional articulation, featuring simplified or modified decorative elements.",
+                      "Original massing, proportions and typological characteristics acknowledging the precinct.",
+                      "Spatial organisation and hierarchy remain identifiable though adapted to changing use or new functions.",
+                    ].map((el, i) => (
+                      <li key={i} className="flex gap-1.5"><span className="text-heritage-olive font-bold mt-0.5 flex-shrink-0">{String.fromCharCode(65 + i)}.</span><span>{el}</span></li>
+                    ))}
+                  </ul>
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  <ul className="space-y-1">
+                    {[
+                      "Modified, reconstructed or newly constructed structures within the pol fabric.",
+                      "Retention of visual continuity through proportions, alignment, openings, façade rhythm or spatial hierarchy.",
+                      "Simplified or contemporary architectural expression responding to the surrounding streetscape.",
+                      "Structures contributing towards continuity of the larger interconnected pol network.",
+                      "Contemporary or simplified expression of detailing, while maintaining continuity.",
+                    ].map((el, i) => (
+                      <li key={i} className="flex gap-1.5"><span className="text-muted-foreground font-bold mt-0.5 flex-shrink-0">{String.fromCharCode(65 + i)}.</span><span>{el}</span></li>
+                    ))}
+                  </ul>
+                </td>
+              </tr>
+
+              {/* Row 4: Scope for Changes */}
+              <tr className="bg-muted/40">
+                <td colSpan={4} className="px-3 py-2 font-display font-semibold text-foreground border-t border-border text-[11px] uppercase tracking-wide">
+                  4. Scope for Changes
+                </td>
+              </tr>
+              <tr className="bg-card">
+                <td className="px-3 py-2.5 align-top border-t border-border text-muted-foreground leading-snug">
+                  Necessary restoration and documentation encouraged for preservation of the building.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Necessary changes or adaptive reuse encouraged for conservation and while retaining the key architectural elements and spatial features.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Adaptive reuse and guided transformation encouraged, retaining spatial organisation and architectural character while accommodating necessary functions.
+                </td>
+                <td className="px-3 py-2.5 align-top border-t border-l border-border text-muted-foreground leading-snug">
+                  Adaptive reuse, restoration or context-sensitive transformation encouraged while retaining continuity within the pol fabric.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-6">
 
         {/* Source note */}
